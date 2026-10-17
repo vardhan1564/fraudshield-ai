@@ -90,6 +90,30 @@ defaults from `.env.example` are used. Postgres reads its user and password only
 it creates the volume, so if you change them in `.env` later, the old ones still apply.
 `down -v` resets them by **deleting the volumes and all their data**.
 
+## Datasets
+Raw data goes to `ml/data/raw/<name>/` (git-ignored, about 3 GB in total).
+
+1. Kaggle token: kaggle.com → Settings → API → **Create New Token**, then save `kaggle.json` to
+   `%USERPROFILE%\.kaggle\` (Windows) or `~/.kaggle/` (macOS/Linux).
+2. IEEE-CIS is a competition: open https://www.kaggle.com/competitions/ieee-fraud-detection/rules
+   once and accept the rules, or its download fails with 403.
+3. Download (needs `pip install -r ml/requirements.txt` for the Kaggle CLI):
+   ```powershell
+   # Windows: use Git Bash, not the WSL bash in System32
+   & "C:\Program Files\Git\bin\bash.exe" scripts/download_data.sh            # all four
+   & "C:\Program Files\Git\bin\bash.exe" scripts/download_data.sh ieee       # just one
+   ```
+   macOS/Linux: `bash scripts/download_data.sh`. Finished datasets are skipped on re-runs.
+
+| Name | Kaggle source | Used for |
+|---|---|---|
+| `ieee` | competition `ieee-fraud-detection` | train + benchmark `txn_model` |
+| `ulb` | `mlg-ulb/creditcardfraud` | quick baseline |
+| `paysim` | `ealaxi/paysim1` | mobile-money patterns |
+| `elliptic` | `ellipticco/elliptic-data-set` | graph model pre-training |
+
+EDA: `jupyter lab ml/notebooks/01_eda_ieee.ipynb` (reads ~1 GB into memory as float32).
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

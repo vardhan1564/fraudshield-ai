@@ -25,7 +25,7 @@
 - [ ] T0.4 Basic CI · B (workflow written + passes locally; tick after first green run on GitHub)
 
 ### P1 Data (Weeks 1–2)
-- [ ] T1.1 Dataset download + EDA · A
+- [ ] T1.1 Dataset download + EDA · A (script + notebook done; waiting on Kaggle token → download → run notebook)
 - [ ] T1.2 UPI simulator · A
 - [ ] T1.3 Feature builders · A
 
@@ -89,6 +89,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-17 · A · T1.1 part 1: scripts/download_data.sh (Git Bash on Windows; validates names, skips finished sets) + 01_eda_ieee.ipynb (float32 load for 8 GB RAM), executed OK on fake IEEE-shaped data; ml/requirements installed · next: kaggle.json + accept IEEE rules, download, run notebook, record numbers here
 - 2026-10-17 · B · T0.4 workflow: python-lint → python-test with postgres/redis services and pip cache; service connectivity tests fail in CI instead of skipping; URLs switched to 127.0.0.1 (localhost cost ~2 s per connection on Windows) · next: create GitHub repo + push to verify
 - 2026-10-17 · A · T0.3 done: app factory, pydantic-settings, JSON logs + request id, async engine (verified against docker postgres), error format, /api/v1/health, /metrics; 25 backend tests pass; spec 04 notes on error codes and /metrics location · P0 gate passed · next T0.4
 - 2026-10-17 · A · T0.2 done: postgres:16, redis:7 (AOF), mlflow v3.17.1 all healthy via compose; MLflow 3.x needs MLFLOW_ALLOW_FILE_STORE=true for the ./mlruns file store · next T0.3
