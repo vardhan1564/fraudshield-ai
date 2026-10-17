@@ -1,11 +1,14 @@
 """UPI simulator (spec 03 §4): config checks, population, and a full n=5000 run."""
 
 import numpy as np
+import pandas as pd
 import pytest
 from pydantic import ValidationError
 
 from ml.simulator.config import load_config
+from ml.simulator.normal import generate_normal
 from ml.simulator.population import World, build_population
+from ml.simulator.schema import CHANNELS, HARD_NEGATIVES
 
 N_USERS = 500
 
@@ -62,3 +65,47 @@ def test_population_devices_and_payees(world: World) -> None:
     assert counts.min() >= 3 and counts.max() <= 15
     owners = np.repeat(world.users["user_id"].to_numpy(), counts)
     assert (world.payees["user_id"].to_numpy()[world.usual_idx] != owners).all()
+
+
+# --- normal behaviour + hard negatives ---------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def normal(world: World) -> pd.DataFrame:
+    return generate_normal(world, 4000, np.random.default_rng(1))
+
+
+def test_normal_rows(world: World, normal: pd.DataFrame) -> None:
+    assert len(normal) == 4000
+    assert normal["scenario"].isna().all()
+    assert set(normal["user_id"]) <= set(world.users["user_id"])
+    assert set(normal["payee_vpa"]) <= set(world.payees["vpa"])
+    assert (normal["amount"] > 0).all()
+    assert normal["t"].between(0, world.end_t).all()
+    assert set(normal["channel"]) <= set(CHANNELS)
+    assert not ((normal["merchant_category"] == "P2P") & (normal["channel"] == "CARD")).any()
+    assert normal["status"].eq("FAILED").mean() < 0.06
+
+
+def test_normal_mostly_repeat_payees(world: World, normal: pd.DataFrame) -> None:
+    usual = {
+        (world.users["user_id"].iat[i], world.payees["vpa"].iat[j])
+        for i in range(world.n_customers)
+        for j in world.usual_idx[world.usual_ptr[i] : world.usual_ptr[i + 1]]
+    }
+    plain = normal[normal["hard_negative"].isna()]
+    repeat = [pair in usual for pair in zip(plain["user_id"], plain["payee_vpa"], strict=True)]
+    assert 0.6 < np.mean(repeat) < 0.8  # config: 70%
+
+
+def test_hard_negatives(world: World, normal: pd.DataFrame) -> None:
+    hn = normal["hard_negative"]
+    assert set(hn.dropna()) == set(HARD_NEGATIVES)
+    assert (normal.loc[hn.notna(), "status"] == "SUCCESS").all()
+    big = normal[hn == "big_legit"].merge(world.users[["user_id", "avg_txn_amount"]])
+    assert (big["amount"] >= 10 * big["avg_txn_amount"] - 0.01).all()
+    assert set(big["merchant_category"]) <= {"RENT", "EDUCATION"}
+    night = normal[hn == "night_legit"]
+    assert ((night["t"] % 86_400) < 5 * 3600).all()
+    calls = normal[hn == "call_legit"]
+    assert (calls["on_call"] & calls["caller_in_contacts"]).all()

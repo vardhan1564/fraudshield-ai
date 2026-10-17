@@ -92,12 +92,12 @@ class World:
     users: pd.DataFrame
     devices: pd.DataFrame
     payees: pd.DataFrame  # vpa, user_id (set when the payee is a customer), category, created_t
-    usual_ptr: np.ndarray  # user i's usual payees: payees row ids usual_idx[ptr[i]:ptr[i+1]]
+    usual_ptr: np.ndarray  # user i's usual payees: payees rows usual_idx[ptr[i]:ptr[i+1]]
     usual_idx: np.ndarray
-    device_ptr: np.ndarray  # user i's own devices: devices row ids device_idx[ptr[i]:ptr[i+1]]
-    device_idx: np.ndarray
+    device_ptr: np.ndarray  # user i's own devices: devices rows ptr[i]:ptr[i+1], main one first
+    n_customers: int  # users[:n_customers] are ordinary customers; mules come after
+    n_merchants: int  # payees[:n_merchants] are merchants, then one payee per customer
     reports: list[pd.DataFrame] = field(default_factory=list)
-    n_customers: int = 0  # users[:n_customers] are ordinary customers; mules come after
 
     @property
     def end_t(self) -> int:
@@ -127,6 +127,45 @@ def fingerprints(rng: np.random.Generator, k: int) -> list[str]:
 def random_ips(rng: np.random.Generator, k: int) -> list[str]:
     octets = rng.integers(1, 255, size=(k, 3))
     return [f"103.{a}.{b}.{c}" for a, b, c in octets]
+
+
+def behaviour(rng: np.random.Generator, k: int) -> dict[str, np.ndarray]:
+    """Behaviour-SDK signals of the real account owner (scenarios override them)."""
+    return {
+        "typing_speed_z": rng.normal(0, 1, size=k),
+        "session_len_s": np.exp(rng.normal(np.log(60), 0.5, size=k)),
+        "login_to_pay_s": np.exp(rng.normal(np.log(25), 0.6, size=k)),
+    }
+
+
+# Columns every generator must set; the rest of TXN_DEFAULTS can be left out.
+TXN_REQUIRED = ("user_id", "payee_vpa", "amount", "device_id", "ip", "geo_lat", "geo_lon", "t")
+TXN_DEFAULTS: dict[str, object] = {
+    "channel": "UPI",
+    "merchant_category": "P2P",
+    "is_vpn": False,
+    "status": "SUCCESS",
+    "on_call": False,
+    "caller_in_contacts": False,
+    "call_duration_s": 0,
+    "screen_share_active": False,
+    "remote_access_app": None,
+    "scenario": None,
+    "hard_negative": None,
+    "ring_id": None,
+}
+
+
+def txn_frame(rng: np.random.Generator, **cols: object) -> pd.DataFrame:
+    """Transaction rows in simulator form (time as `t` seconds); fills defaults and behaviour."""
+    missing = [c for c in TXN_REQUIRED if c not in cols]
+    if missing:
+        raise ValueError(f"missing transaction columns: {missing}")
+    k = np.size(cols["t"])  # type: ignore[arg-type]
+    # Scalars (defaults, constants) are repeated to k rows by pandas.
+    frame = pd.DataFrame({**TXN_DEFAULTS, **behaviour(rng, k), **cols}, index=pd.RangeIndex(k))
+    frame["t"] = frame["t"].astype("int64")
+    return frame
 
 
 def make_people(
@@ -251,6 +290,6 @@ def build_population(cfg: SimConfig, rng: np.random.Generator) -> World:
         usual_ptr=usual_ptr,
         usual_idx=raw,
         device_ptr=device_ptr,
-        device_idx=np.arange(k),
         n_customers=n,
+        n_merchants=n_merchants,
     )
