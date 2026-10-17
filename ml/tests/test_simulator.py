@@ -8,7 +8,8 @@ from pydantic import ValidationError
 from ml.simulator.config import load_config
 from ml.simulator.normal import generate_normal
 from ml.simulator.population import World, build_population
-from ml.simulator.schema import CHANNELS, HARD_NEGATIVES
+from ml.simulator.scenarios import fill_to_target, generate_scenarios
+from ml.simulator.schema import CHANNELS, HARD_NEGATIVES, SHARED_SCENARIOS
 
 N_USERS = 500
 
@@ -109,3 +110,92 @@ def test_hard_negatives(world: World, normal: pd.DataFrame) -> None:
     assert ((night["t"] % 86_400) < 5 * 3600).all()
     calls = normal[hn == "call_legit"]
     assert (calls["on_call"] & calls["caller_in_contacts"]).all()
+
+
+# --- injected scenarios ------------------------------------------------------------------------
+
+SCENARIO_N = 20_000  # big enough that every scenario has several incidents
+
+
+@pytest.fixture(scope="module")
+def scen() -> tuple[World, pd.DataFrame]:
+    w = build_population(load_config(n_users=N_USERS), np.random.default_rng(2))
+    return w, generate_scenarios(w, SCENARIO_N, np.random.default_rng(3))
+
+
+def test_scenario_counts_are_exact(scen: tuple[World, pd.DataFrame]) -> None:
+    world, frame = scen
+    counts = frame["scenario"].value_counts()
+    for name in SHARED_SCENARIOS:
+        assert counts[name] == round(world.cfg.shares[name] * SCENARIO_N)
+    assert frame["t"].between(0, world.end_t).all() and (frame["amount"] > 0).all()
+
+
+def test_fill_to_target_folds_small_leftovers(world: World) -> None:
+    def make(w: World, rng: np.random.Generator, size: int) -> pd.DataFrame:
+        return pd.DataFrame({"size": [size]})
+
+    for target in (0, 1, 7, 23):
+        parts = fill_to_target(world, np.random.default_rng(target), target, make, (6, 16))
+        sizes = [int(p["size"].iat[0]) for p in parts]
+        assert sum(sizes) == target
+        assert all(s >= 6 for s in sizes) or len(sizes) == 1
+
+
+def _rows(frame: pd.DataFrame, name: str) -> pd.DataFrame:
+    return frame[frame["scenario"] == name]
+
+
+def test_digital_arrest_signature(scen: tuple[World, pd.DataFrame]) -> None:
+    world, frame = scen
+    da = _rows(frame, "digital_arrest").merge(world.users[["user_id", "avg_txn_amount"]])
+    assert (da["on_call"] & ~da["caller_in_contacts"] & da["screen_share_active"]).all()
+    assert (da["call_duration_s"] >= 1200).all()
+    assert (da["amount"] >= 10 * da["avg_txn_amount"] - 0.01).all()
+    assert (da["amount"] <= 50 * da["avg_txn_amount"] + 0.01).all()
+    # New payee: a scam VPA nobody else ever pays.
+    assert not set(da["payee_vpa"]) & set(
+        frame.loc[frame["scenario"] != "digital_arrest", "payee_vpa"]
+    )
+
+
+def test_fake_support_refund_signature(scen: tuple[World, pd.DataFrame]) -> None:
+    world, frame = scen
+    fs = _rows(frame, "fake_support_refund")
+    assert (fs["screen_share_active"] | fs["remote_access_app"].notna()).all()
+    reports = pd.concat(world.reports)
+    first = fs.groupby("payee_vpa")["t"].min()
+    for vpa, t in first.items():  # reported before the scam
+        assert (reports.loc[reports["payee_vpa"] == vpa, "t"] < t).sum() >= 3
+
+
+def test_investment_task_signature(scen: tuple[World, pd.DataFrame]) -> None:
+    _, frame = scen
+    for _, g in _rows(frame, "investment_task").groupby("payee_vpa"):
+        g = g.sort_values("t")
+        assert g["user_id"].nunique() == 1
+        assert g["amount"].is_monotonic_increasing
+        assert g["t"].max() - g["t"].min() <= 10 * 86_400
+
+
+def test_account_takeover_signature(scen: tuple[World, pd.DataFrame]) -> None:
+    world, frame = scen
+    ato = _rows(frame, "account_takeover")
+    ato = ato.merge(world.devices[["device_id", "first_seen_t"]]).merge(
+        world.users[["user_id", "sim_changed_t"]]
+    )
+    assert ((ato["t"] - ato["first_seen_t"]).between(0, 86_400)).all()  # new device
+    assert ((ato["t"] - ato["sim_changed_t"]).between(0, 7 * 86_400)).all()  # SIM changed < 7 d
+    assert ((ato["t"] % 86_400) < 5 * 3600).all()  # night
+    assert (ato["typing_speed_z"].abs() > 3).all()
+
+
+def test_card_testing_signature(scen: tuple[World, pd.DataFrame]) -> None:
+    _, frame = scen
+    ct = _rows(frame, "card_testing")
+    assert (ct["channel"] == "CARD").all()
+    failed, ok = ct[ct["status"] == "FAILED"], ct[ct["status"] == "SUCCESS"]
+    assert (failed["amount"] <= 20).all()
+    for _, big in ok.iterrows():  # each big payment follows failed small tests by the same card
+        before = failed[(failed["user_id"] == big["user_id"]) & (failed["t"] < big["t"])]
+        assert len(before) >= 5 and big["t"] - before["t"].min() < 3600

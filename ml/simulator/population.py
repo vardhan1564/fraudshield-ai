@@ -98,6 +98,7 @@ class World:
     n_customers: int  # users[:n_customers] are ordinary customers; mules come after
     n_merchants: int  # payees[:n_merchants] are merchants, then one payee per customer
     reports: list[pd.DataFrame] = field(default_factory=list)
+    used_victims: set[int] = field(default_factory=set)  # scenario victims, one incident each
 
     @property
     def end_t(self) -> int:
