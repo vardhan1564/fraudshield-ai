@@ -28,9 +28,9 @@ class Settings(BaseSettings):
     refresh_token_expire_days: int = Field(default=7, gt=0)
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
 
-    # Stores
-    database_url: str = "postgresql+asyncpg://fraudshield:fraudshield@localhost:5432/fraudshield"
-    redis_url: str = "redis://localhost:6379/0"
+    # Stores (127.0.0.1, not localhost: see the note in .env.example)
+    database_url: str = "postgresql+asyncpg://fraudshield:fraudshield@127.0.0.1:5432/fraudshield"
+    redis_url: str = "redis://127.0.0.1:6379/0"
     stream_scored: str = "stream:transactions.scored"
     stream_cases: str = "stream:cases.labeled"
     stream_reports: str = "stream:reports.created"
@@ -43,7 +43,7 @@ class Settings(BaseSettings):
     neo4j_password: SecretStr | None = None
 
     # ML
-    mlflow_tracking_uri: str = "http://localhost:5000"
+    mlflow_tracking_uri: str = "http://127.0.0.1:5000"
     model_dir: Path = Path("ml/artifacts")
     threshold_approve: float = Field(default=0.30, ge=0, le=1)
     threshold_hold: float = Field(default=0.70, ge=0, le=1)

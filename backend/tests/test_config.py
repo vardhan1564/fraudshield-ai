@@ -4,7 +4,11 @@ from pydantic import ValidationError
 from app.core.config import REPO_ROOT, Settings
 
 
-def test_env_example_parses_with_inline_comments() -> None:
+def test_env_example_parses_with_inline_comments(monkeypatch: pytest.MonkeyPatch) -> None:
+    # Env vars beat the file (CI sets LLM_PROVIDER etc.), so read the file alone.
+    for name in Settings.model_fields:
+        monkeypatch.delenv(name.upper(), raising=False)
+
     settings = Settings(_env_file=REPO_ROOT / ".env.example")
 
     assert settings.graph_backend == "networkx"  # value has a trailing "# ..." comment

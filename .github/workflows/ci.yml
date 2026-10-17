@@ -1,0 +1,97 @@
+# CI per docs/specs/08-security-testing-deploy.md section 3.
+# Jobs: python-lint -> python-test. `web` and `audit` are added in later tasks (T6.1).
+name: CI
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  PYTHON_VERSION: "3.11"
+  PIP_DISABLE_PIP_VERSION_CHECK: "1"
+
+jobs:
+  python-lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            backend/requirements.txt
+
+      # mypy needs the backend's runtime packages to type-check against.
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt -r backend/requirements.txt
+
+      - name: Ruff lint
+        run: ruff check . --output-format=github
+
+      - name: Ruff format
+        run: ruff format --check .
+
+      - name: Mypy (strict, backend/app)
+        run: mypy
+
+  python-test:
+    needs: python-lint
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fraudshield
+          POSTGRES_USER: fraudshield
+          POSTGRES_PASSWORD: fraudshield
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U fraudshield -d fraudshield"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+      redis:
+        image: redis:7
+        ports:
+          - 6379:6379
+        options: >-
+          --health-cmd "redis-cli ping"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 10
+    env:
+      # No .env in CI: settings come from these variables (test-only values, not secrets).
+      APP_ENV: test
+      DATABASE_URL: postgresql+asyncpg://fraudshield:fraudshield@127.0.0.1:5432/fraudshield
+      REDIS_URL: redis://127.0.0.1:6379/0
+      LLM_PROVIDER: template
+    steps:
+      - uses: actions/checkout@v5
+
+      - uses: actions/setup-python@v6
+        with:
+          python-version: ${{ env.PYTHON_VERSION }}
+          cache: pip
+          cache-dependency-path: |
+            requirements-dev.txt
+            backend/requirements.txt
+
+      # ml/requirements.txt (MLflow, Transformers, Jupyter...) joins once ml tests need it (T1.x).
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt -r backend/requirements.txt
+
+      - name: Pytest (backend + ml) with coverage
+        run: pytest -q --cov --cov-report=term-missing:skip-covered
