@@ -1,0 +1,75 @@
+# UPI simulator settings (docs/specs/03-ml-spec.md section 4).
+# CLI flags --n, --users and --seed override n_transactions, n_users and seed.
+seed: 42
+n_transactions: 100000 # total rows in transactions.parquet
+n_users: 10000 # ordinary customers (mule accounts are added on top)
+start: "2026-07-01T00:00:00+05:30"
+days: 90
+
+# Share of all transaction rows per injected scenario (mule rings are set below instead).
+shares:
+  digital_arrest: 0.004
+  fake_support_refund: 0.003
+  investment_task: 0.003
+  account_takeover: 0.002
+  card_testing: 0.002
+
+# Mule rings. Numbers are chosen so the rule detectors in spec 01 F3 can fire.
+rings:
+  count: 20
+  min_size: 10 # mule accounts per ring
+  max_size: 30
+  victims_per_collector: [22, 35] # fan-in: > 20 distinct senders in 24 h
+  forward_share: [0.85, 0.97] # pass-through: > 80% forwarded within 1 h
+  new_account_share: 0.5 # mules opened < 7 days before the ring starts
+  accounts_per_device: 3 # shared device: >= 3 accounts on one phone
+
+normal:
+  repeat_payee_share: 0.70
+  failed_share: 0.03
+  payees_per_user: [3, 15]
+  off_hours_share: 0.10 # payments outside the user's usual hours
+  channel_mix: { UPI: 0.80, CARD: 0.12, WALLET: 0.08 }
+
+# Legit rows that look risky, as a share of normal rows (label in hard_negative).
+hard_negatives:
+  big_legit: 0.005 # rent / fees, 10-40x the user's average
+  new_payee_legit: 0.005 # first payment to a new merchant, 3-10x average
+  night_legit: 0.005 # 00:00-04:59
+  call_legit: 0.005 # on a long call with someone in contacts
+
+# Merchant categories: how often a merchant has the category, and amount vs the user's average.
+merchant_categories:
+  GROCERY: { weight: 0.22, amount_mult: 0.6 }
+  FOOD: { weight: 0.18, amount_mult: 0.4 }
+  FUEL: { weight: 0.10, amount_mult: 1.0 }
+  UTILITIES: { weight: 0.10, amount_mult: 1.5 }
+  ECOMMERCE: { weight: 0.15, amount_mult: 1.5 }
+  TRAVEL: { weight: 0.05, amount_mult: 3.0 }
+  ENTERTAINMENT: { weight: 0.07, amount_mult: 0.8 }
+  HEALTH: { weight: 0.05, amount_mult: 2.0 }
+  EDUCATION: { weight: 0.04, amount_mult: 6.0 }
+  RENT: { weight: 0.04, amount_mult: 8.0 }
+p2p_amount_mult: 1.0
+
+cities:
+  - { name: Mumbai, tier: 1, lat: 19.08, lon: 72.88, weight: 0.10 }
+  - { name: Delhi, tier: 1, lat: 28.61, lon: 77.21, weight: 0.10 }
+  - { name: Bengaluru, tier: 1, lat: 12.97, lon: 77.59, weight: 0.08 }
+  - { name: Hyderabad, tier: 1, lat: 17.39, lon: 78.49, weight: 0.06 }
+  - { name: Chennai, tier: 1, lat: 13.08, lon: 80.27, weight: 0.06 }
+  - { name: Kolkata, tier: 1, lat: 22.57, lon: 88.36, weight: 0.06 }
+  - { name: Pune, tier: 1, lat: 18.52, lon: 73.86, weight: 0.05 }
+  - { name: Jaipur, tier: 2, lat: 26.91, lon: 75.79, weight: 0.05 }
+  - { name: Lucknow, tier: 2, lat: 26.85, lon: 80.95, weight: 0.05 }
+  - { name: Nagpur, tier: 2, lat: 21.15, lon: 79.09, weight: 0.04 }
+  - { name: Indore, tier: 2, lat: 22.72, lon: 75.86, weight: 0.04 }
+  - { name: Nashik, tier: 2, lat: 19.99, lon: 73.79, weight: 0.04 }
+  - { name: Patna, tier: 2, lat: 25.59, lon: 85.14, weight: 0.04 }
+  - { name: Coimbatore, tier: 2, lat: 11.02, lon: 76.96, weight: 0.04 }
+  - { name: Bhopal, tier: 2, lat: 23.26, lon: 77.41, weight: 0.04 }
+  - { name: Jalgaon, tier: 3, lat: 21.00, lon: 75.56, weight: 0.03 }
+  - { name: Sangli, tier: 3, lat: 16.85, lon: 74.58, weight: 0.03 }
+  - { name: Gaya, tier: 3, lat: 24.79, lon: 85.00, weight: 0.03 }
+  - { name: Hubballi, tier: 3, lat: 15.36, lon: 75.12, weight: 0.03 }
+  - { name: Muzaffarpur, tier: 3, lat: 26.12, lon: 85.39, weight: 0.03 }
