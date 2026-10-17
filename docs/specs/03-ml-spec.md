@@ -1,0 +1,95 @@
+# Spec 03 — Machine Learning
+
+## 1. Models
+| Name | Purpose | Algorithm | Output | Artifact |
+|---|---|---|---|---|
+| `txn_model` | General fraud patterns | XGBoost (LightGBM as alt) | `txn_score` | `ml/artifacts/txn_model.json` |
+| `anomaly_model` | Unusual behaviour vs own baseline | Autoencoder (PyTorch); Isolation Forest baseline | `anomaly_score` | `anomaly_model.pt` |
+| `graph_model` | Mule / ring accounts | GraphSAGE (PyG) | `graph_score` | `graph_model.pt` |
+| `social_model` | Scam-induced payments | LightGBM | `social_eng_score` | `social_model.txt` |
+| `text_model` | Scam SMS / links | DistilBERT fine-tuned | label + prob | `text_model/` |
+| `meta_model` | Combine scores | Logistic regression (calibrated) | `risk_score` | `meta_model.pkl` |
+
+All registered in MLflow with: params, metrics, feature list (`features.json`), training data hash, model card.
+
+## 2. Feature list (feature store contract)
+Names below are **exact**; code must use them.
+
+| Group | Feature | Type | Source |
+|---|---|---|---|
+| Txn | `amount` | float | request |
+| Txn | `amount_log` | float | derived |
+| Txn | `amount_ratio_avg` | float | amount / user 30-day avg (Redis profile) |
+| Txn | `hour`, `weekday`, `is_night` | int/bool | timestamp |
+| Txn | `channel_upi`, `channel_card`, `channel_wallet` | bool | request |
+| Txn | `merchant_category` | categorical | request |
+| Velocity | `txn_count_5m`, `txn_count_1h`, `txn_count_24h` | int | Redis |
+| Velocity | `amount_sum_1h`, `amount_sum_24h` | float | Redis |
+| Velocity | `failed_count_1h` | int | Redis |
+| Payee | `payee_is_new` | bool | Postgres/Redis set of user payees |
+| Payee | `payee_account_age_days` | int | payees table |
+| Payee | `payee_unique_senders_24h` | int | Redis set size |
+| Payee | `payee_reputation`, `payee_report_count` | float/int | payees |
+| Device | `device_is_new`, `device_rooted`, `ip_distance_km`, `is_vpn`, `sim_changed_7d` | mixed | request + devices |
+| Behaviour | `typing_speed_z`, `session_len_s`, `login_to_pay_s` | float | SDK |
+| Context | `ctx_unknown_call`, `ctx_screen_share`, `ctx_call_long` | bool | request.context |
+| Coach | `coach_red_flags` | int | coach answers (0 before coach) |
+| Graph | `graph_score`, `graph_degree`, `graph_pagerank`, `hops_to_fraud`, `community_fraud_ratio` | float | Redis graph cache |
+
+## 3. Datasets
+| Dataset | Use | Location |
+|---|---|---|
+| IEEE-CIS Fraud Detection (Kaggle) | Train/benchmark `txn_model` | `ml/data/raw/ieee/` |
+| ULB Credit Card Fraud (Kaggle) | Quick baseline | `ml/data/raw/ulb/` |
+| PaySim (Kaggle) | Mobile-money patterns | `ml/data/raw/paysim/` |
+| Elliptic (Kaggle) | Graph model pre-training | `ml/data/raw/elliptic/` |
+| SMS Spam Collection + own Indian scam SMS (≥ 500 labelled) | Text model | `ml/data/raw/sms/` |
+| **Simulator output** | UPI-style data with scenarios | `ml/data/simulated/` |
+
+Download via Kaggle CLI (`kaggle competitions download -c ieee-fraud-detection`). Raw data is git-ignored.
+
+## 4. Simulator spec (`ml/simulator/`)
+- Users: 10,000 with age band, city tier, avg amount, typical hours, 1–3 devices.
+- Normal behaviour: Poisson daily txns, log-normal amounts, repeat payees 70%.
+- Injected scenarios (labels in `scenario` column):
+| Scenario | Share | Signature |
+|---|---|---|
+| `digital_arrest` | 0.4% | On unknown call 20+ min, screen share, new payee, amount 10–50× avg |
+| `fake_support_refund` | 0.3% | Screen-share/remote app, payee recently reported |
+| `investment_task` | 0.3% | Multiple increasing payments to new payee over days |
+| `account_takeover` | 0.2% | New device, SIM changed, night, behaviour z > 3 |
+| `mule_ring` | 20 rings × 10–30 accounts | Fan-in then fast forward |
+| `card_testing` | 0.2% | Many small failed + one large |
+- Hard negatives: legit big payments (rent, fees), legit new payees, legit night txns.
+- Output: `transactions.parquet`, `users.parquet`, `devices.parquet`, `edges.parquet`, `reports.parquet`.
+
+## 5. Training protocol
+- Split by **time** (train first 70%, val next 15%, test last 15%) — never random split.
+- Imbalance: `scale_pos_weight` (XGBoost) or class weights; SMOTE only inside CV folds.
+- Tuning: Optuna, 30 trials, objective = PR-AUC on val.
+- Calibrate meta-model (isotonic).
+- Thresholds chosen on val to hit FPR ≤ 1% for HOLD, ≤ 5% for STEP_UP.
+
+## 6. Metrics (report all on test split)
+| Metric | Target |
+|---|---|
+| PR-AUC | > 0.80 (IEEE-CIS) |
+| ROC-AUC | > 0.92 |
+| Recall @ 1% FPR | > 70% |
+| F1 at chosen threshold | report |
+| Per-scenario recall (simulator) | each ≥ 80% |
+| Fairness: FPR gap across city tier / age band | < 2 points |
+| Inference latency (all models, 1 row) | < 30 ms |
+
+## 7. Explainability
+- SHAP TreeExplainer for tree models; KernelExplainer only offline.
+- Store top 10 SHAP values per scored txn in `model_scores.shap_json`.
+- Global: SHAP summary plot saved to MLflow per model version.
+
+## 8. Retraining & drift
+- `ml/pipelines/retrain.py`: pulls labelled cases + recent simulated data, retrains `txn_model` + `meta_model`, compares to champion, registers challenger.
+- Promotion only if challenger PR-AUC ≥ champion − 0.005 and latency within budget.
+- Evidently `DataDriftPreset` daily; output HTML to `ml/reports/drift/`.
+
+## 9. Model card template (`ml/models/<name>/MODEL_CARD.md`)
+Purpose · training data · features · metrics · thresholds · limitations · fairness results · version · date.
