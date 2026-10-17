@@ -1,0 +1,208 @@
+{
+  "version": 1,
+  "features": [
+    {
+      "name": "amount",
+      "dtype": "float64",
+      "group": "txn"
+    },
+    {
+      "name": "amount_log",
+      "dtype": "float64",
+      "group": "txn"
+    },
+    {
+      "name": "amount_ratio_avg",
+      "dtype": "float64",
+      "group": "txn"
+    },
+    {
+      "name": "hour",
+      "dtype": "int64",
+      "group": "txn"
+    },
+    {
+      "name": "weekday",
+      "dtype": "int64",
+      "group": "txn"
+    },
+    {
+      "name": "is_night",
+      "dtype": "bool",
+      "group": "txn"
+    },
+    {
+      "name": "channel_upi",
+      "dtype": "bool",
+      "group": "txn"
+    },
+    {
+      "name": "channel_card",
+      "dtype": "bool",
+      "group": "txn"
+    },
+    {
+      "name": "channel_wallet",
+      "dtype": "bool",
+      "group": "txn"
+    },
+    {
+      "name": "merchant_category",
+      "dtype": "category",
+      "group": "txn"
+    },
+    {
+      "name": "txn_count_5m",
+      "dtype": "int64",
+      "group": "velocity"
+    },
+    {
+      "name": "txn_count_1h",
+      "dtype": "int64",
+      "group": "velocity"
+    },
+    {
+      "name": "txn_count_24h",
+      "dtype": "int64",
+      "group": "velocity"
+    },
+    {
+      "name": "amount_sum_1h",
+      "dtype": "float64",
+      "group": "velocity"
+    },
+    {
+      "name": "amount_sum_24h",
+      "dtype": "float64",
+      "group": "velocity"
+    },
+    {
+      "name": "failed_count_1h",
+      "dtype": "int64",
+      "group": "velocity"
+    },
+    {
+      "name": "payee_is_new",
+      "dtype": "bool",
+      "group": "payee"
+    },
+    {
+      "name": "payee_account_age_days",
+      "dtype": "int64",
+      "group": "payee"
+    },
+    {
+      "name": "payee_unique_senders_24h",
+      "dtype": "int64",
+      "group": "payee"
+    },
+    {
+      "name": "payee_reputation",
+      "dtype": "float64",
+      "group": "payee"
+    },
+    {
+      "name": "payee_report_count",
+      "dtype": "int64",
+      "group": "payee"
+    },
+    {
+      "name": "device_is_new",
+      "dtype": "bool",
+      "group": "device"
+    },
+    {
+      "name": "device_rooted",
+      "dtype": "bool",
+      "group": "device"
+    },
+    {
+      "name": "ip_distance_km",
+      "dtype": "float64",
+      "group": "device"
+    },
+    {
+      "name": "is_vpn",
+      "dtype": "bool",
+      "group": "device"
+    },
+    {
+      "name": "sim_changed_7d",
+      "dtype": "bool",
+      "group": "device"
+    },
+    {
+      "name": "typing_speed_z",
+      "dtype": "float64",
+      "group": "behaviour"
+    },
+    {
+      "name": "session_len_s",
+      "dtype": "float64",
+      "group": "behaviour"
+    },
+    {
+      "name": "login_to_pay_s",
+      "dtype": "float64",
+      "group": "behaviour"
+    },
+    {
+      "name": "ctx_unknown_call",
+      "dtype": "bool",
+      "group": "context"
+    },
+    {
+      "name": "ctx_screen_share",
+      "dtype": "bool",
+      "group": "context"
+    },
+    {
+      "name": "ctx_call_long",
+      "dtype": "bool",
+      "group": "context"
+    },
+    {
+      "name": "coach_red_flags",
+      "dtype": "int64",
+      "group": "coach"
+    },
+    {
+      "name": "graph_score",
+      "dtype": "float64",
+      "group": "graph"
+    },
+    {
+      "name": "graph_degree",
+      "dtype": "float64",
+      "group": "graph"
+    },
+    {
+      "name": "graph_pagerank",
+      "dtype": "float64",
+      "group": "graph"
+    },
+    {
+      "name": "hops_to_fraud",
+      "dtype": "float64",
+      "group": "graph"
+    },
+    {
+      "name": "community_fraud_ratio",
+      "dtype": "float64",
+      "group": "graph"
+    }
+  ],
+  "merchant_categories": [
+    "P2P",
+    "GROCERY",
+    "FOOD",
+    "FUEL",
+    "UTILITIES",
+    "ECOMMERCE",
+    "TRAVEL",
+    "ENTERTAINMENT",
+    "HEALTH",
+    "EDUCATION",
+    "RENT"
+  ]
+}
