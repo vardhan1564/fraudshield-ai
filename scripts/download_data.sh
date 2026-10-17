@@ -36,9 +36,11 @@ find_kaggle() {
 
 check_credentials() {
   local config_dir="${KAGGLE_CONFIG_DIR:-$HOME/.kaggle}"
+  # New-style API token (kaggle CLI >= 1.8), then legacy kaggle.json, then legacy env vars.
+  if [[ -f "$config_dir/access_token" || -n "${KAGGLE_API_TOKEN:-}" ]]; then return; fi
   if [[ -f "$config_dir/kaggle.json" ]]; then return; fi
   if [[ -n "${KAGGLE_USERNAME:-}" && -n "${KAGGLE_KEY:-}" ]]; then return; fi
-  die "No Kaggle credentials. Create a token at kaggle.com > Settings > API and save it as $config_dir/kaggle.json"
+  die "No Kaggle credentials. kaggle.com > Settings > API Tokens > Generate New Token, then save it as $config_dir/access_token"
 }
 
 download() {

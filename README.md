@@ -93,8 +93,9 @@ it creates the volume, so if you change them in `.env` later, the old ones still
 ## Datasets
 Raw data goes to `ml/data/raw/<name>/` (git-ignored, about 3 GB in total).
 
-1. Kaggle token: kaggle.com → Settings → API → **Create New Token**, then save `kaggle.json` to
-   `%USERPROFILE%\.kaggle\` (Windows) or `~/.kaggle/` (macOS/Linux).
+1. Kaggle token: kaggle.com → Settings → **API Tokens** → **Generate New Token**, then save the token
+   text as `%USERPROFILE%\.kaggleccess_token` (Windows) or `~/.kaggle/access_token` (macOS/Linux).
+   A legacy `kaggle.json` in the same folder also works.
 2. IEEE-CIS is a competition: open https://www.kaggle.com/competitions/ieee-fraud-detection/rules
    once and accept the rules, or its download fails with 403.
 3. Download (needs `pip install -r ml/requirements.txt` for the Kaggle CLI):
