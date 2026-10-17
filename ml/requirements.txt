@@ -4,7 +4,7 @@
 -r ../backend/requirements.txt
 
 # Data
-pyarrow==25.0.1  # mlflow 3.17 does not accept 26.x yet
+pyarrow==25.0.1  # mlflow 3.17 does not accept 26.x yet; same pin in requirements-dev.txt
 kaggle==2.2.4
 
 # Modelling
