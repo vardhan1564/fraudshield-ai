@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P2 Core ML
-- **Next task:** T2.1 Transaction model baseline (A) · T0.4 still needs the GitHub repo (B)
+- **Next task:** T2.1 Transaction model baseline (A)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
@@ -22,7 +22,7 @@
 - [x] T0.1 Repo scaffold · A
 - [x] T0.2 Local infrastructure · A
 - [x] T0.3 Backend skeleton · A
-- [ ] T0.4 Basic CI · B (workflow written + passes locally; tick after first green run on GitHub)
+- [x] T0.4 Basic CI · B
 
 ### P1 Data (Weeks 1–2)
 - [x] T1.1 Dataset download + EDA · A
@@ -89,6 +89,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-17 · B · T0.4 done: private repo github.com/vardhan1564/fraudshield-ai; first CI run failed (ml tests need pyarrow, CI installs only dev + backend), fixed by pinning pyarrow in requirements-dev.txt; run 39049205676 green: lint + 75 tests, 98% coverage, postgres/redis service tests ran (not skipped). gh token needed the `workflow` scope to push ci.yml · next T2.1
 - 2026-10-17 · A · T1.3 done: ml/features (schema.py -> features.json, 38 features exactly as spec 03 §2; txn, velocity, payee, device, context groups; pure functions; windows strictly earlier, O(n log n)). 17 tests: 50-row hand-computed fixture incl. window edges, cut-off no-leakage check on fixture + simulator. 100k build in 1.3 s. Spec 03 §2 definitions added. Follow-up for T2.1: payee_is_new is 0.72 on legit rows because simulated users have no history before day 1, so use the first ~14 days as warm-up (features only, no training) or add pre-window history · P1 gate passed · next T2.1
 - 2026-10-17 · A · T1.2 done: ml/simulator (config.yaml, population, normal + 4 hard-negative types, 5 scenarios with exact shares, 20 mule rings built to trip all 4 F3 detectors, 5 parquet files). 100k rows in 8.4 s / 225 MB; fraud 2.87% (1,470 ring rows, 403 mules). 26 simulator tests (signatures, rings, determinism). Spec 03 §4 notes added (no payees file; payee facts on each txn) · next T1.3
 - 2026-10-17 · A · T1.1 done: all 4 datasets in ml/data/raw (ieee 1.3G, elliptic 666M, paysim 471M, ulb 144M). IEEE train: 590,540 rows x 434 cols, fraud 3.50% (7.85% with identity vs 2.09% without, identity on 24.4%); 212 cols >50% missing; top corr V257 +0.38, V246, V244, V242 (all ~78% missing); fraud rate peaks ~10.6% at relative hour 7 (low-volume hours); fraud has extra mass < $1 (card testing). Notebook keeps txn/identity unmerged (merge OOM'd with ~1.6 GB free). Script accepts new Kaggle API tokens (~/.kaggle/access_token). Elliptic is CC BY-NC-ND: fine for this non-commercial project · next T1.2
