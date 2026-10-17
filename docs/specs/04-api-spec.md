@@ -38,7 +38,7 @@
 | 25 | POST | `/models/{version}/deploy` | admin | Promote model | P1 |
 | 26 | GET | `/metrics/overview?from=&to=` | analyst, admin | KPIs + chart data | P0 |
 | 27 | GET | `/audit-log?entity=&actor=` | admin | Audit entries (+ `?format=csv`) | P1 |
-| 28 | GET | `/health` · `/metrics` | public | Liveness · Prometheus | P0 |
+| 28 | GET | `/health` · `/metrics` | public | Liveness · Prometheus. Health is `/api/v1/health` → `{"status":"ok"}`; Prometheus is at root `/metrics` (outside the base URL, so `/api/v1/metrics/overview` can't clash and Nginx won't expose it publicly) | P0 |
 
 ## 2. Core contracts
 
@@ -155,5 +155,12 @@ Auth via `?token=`. Only messages for the logged-in user.
 | 403 | `FORBIDDEN` | Wrong role |
 | 404 | `NOT_FOUND` | Unknown id |
 | 409 | `DUPLICATE_TXN` | Same txn_id scored twice |
+| 405 | `METHOD_NOT_ALLOWED` | Path exists, wrong HTTP method |
 | 429 | `RATE_LIMITED` | > 100 req/s per key |
+| 500 | `INTERNAL_ERROR` | Unexpected server error (no internals in the message) |
 | 503 | `MODEL_UNAVAILABLE` | Models not loaded |
+
+Specific codes (`DUPLICATE_TXN`, `MODEL_UNAVAILABLE`) are raised by services via `AppError`. Any other
+409 or 503 falls back to the generic `CONFLICT` / `SERVICE_UNAVAILABLE`. Validation errors return
+**400** (not FastAPI's default 422), with `details.errors = [{loc, msg, type}]` and never echo the input.
+_(Note added in T0.3.)_

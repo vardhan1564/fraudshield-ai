@@ -5,12 +5,12 @@
 
 ## Current status
 - **Phase:** P0 Setup
-- **Next task:** T0.3 (A) · T0.4 after T0.3 (B)
+- **Next task:** T0.4 (B) · then T1.1 (A)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
 ## Gates
-- [ ] P0 gate: infra up + `/api/v1/health` 200
+- [x] P0 gate: infra up + `/api/v1/health` 200
 - [ ] P1 gate: simulator + feature tests pass
 - [ ] **Gate A**: PR-AUC > 0.80 (IEEE-CIS test)
 - [ ] **Gate B**: p95 < 100 ms @ 50 rps
@@ -21,7 +21,7 @@
 ### P0 Setup (Week 1)
 - [x] T0.1 Repo scaffold · A
 - [x] T0.2 Local infrastructure · A
-- [ ] T0.3 Backend skeleton · A
+- [x] T0.3 Backend skeleton · A
 - [ ] T0.4 Basic CI · B
 
 ### P1 Data (Weeks 1–2)
@@ -89,5 +89,6 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-17 · A · T0.3 done: app factory, pydantic-settings, JSON logs + request id, async engine (verified against docker postgres), error format, /api/v1/health, /metrics; 25 backend tests pass; spec 04 notes on error codes and /metrics location · P0 gate passed · next T0.4
 - 2026-10-17 · A · T0.2 done: postgres:16, redis:7 (AOF), mlflow v3.17.1 all healthy via compose; MLflow 3.x needs MLFLOW_ALLOW_FILE_STORE=true for the ./mlruns file store · next T0.3
 - 2026-10-17 · A · T0.1 done: planned repo layout, pyproject (ruff/mypy strict/pytest), pinned requirements, README; ruff + mypy clean, 14 smoke tests pass · next T0.2 infra

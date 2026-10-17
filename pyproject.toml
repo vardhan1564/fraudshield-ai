@@ -36,7 +36,7 @@ quote-style = "double"
 python_version = "3.11"
 mypy_path = "backend"
 files = ["backend/app"]
-# T0.3: add plugins = ["pydantic.mypy"] once pydantic is installed.
+plugins = ["pydantic.mypy"]
 strict = true
 warn_unreachable = true
 
