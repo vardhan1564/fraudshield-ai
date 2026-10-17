@@ -37,3 +37,9 @@ load/reports/
 .DS_Store
 Thumbs.db
 .idea/
+
+# Coverage
+.coverage
+.coverage.*
+coverage.xml
+htmlcov/
