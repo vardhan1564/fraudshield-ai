@@ -1,0 +1,71 @@
+# Local infrastructure: PostgreSQL, Redis and MLflow. API, worker and web run on the host.
+# Run from the repo root so the root .env is used:
+#   docker compose --env-file .env -f infra/docker-compose.yml up -d
+# Defaults below match .env.example, so it also works without --env-file.
+# Ports bind to 127.0.0.1 only: nothing is exposed to the network.
+
+name: fraudshield
+
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB:-fraudshield}
+      POSTGRES_USER: ${POSTGRES_USER:-fraudshield}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-fraudshield}
+    ports:
+      - "127.0.0.1:${POSTGRES_PORT:-5432}:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d $${POSTGRES_DB}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  redis:
+    image: redis:7
+    restart: unless-stopped
+    command: ["redis-server", "--appendonly", "yes"]
+    ports:
+      - "127.0.0.1:6379:6379"
+    volumes:
+      - redis-data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  mlflow:
+    # Same version as the mlflow client pinned in ml/requirements.txt.
+    image: ghcr.io/mlflow/mlflow:v3.17.1
+    restart: unless-stopped
+    environment:
+      # MLflow 3.x refuses the file store unless opted in (we use the ./mlruns file store).
+      MLFLOW_ALLOW_FILE_STORE: "true"
+    # File store in ./mlruns (repo root). Artifacts are uploaded through the server,
+    # so clients on the host never need the container's paths.
+    command:
+      - mlflow
+      - server
+      - --host=0.0.0.0
+      - --port=5000
+      - --backend-store-uri=/mlruns
+      - --artifacts-destination=/mlruns/artifacts
+    ports:
+      - "127.0.0.1:5000:5000"
+    volumes:
+      - ../mlruns:/mlruns
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:5000/health')"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+      start_period: 20s
+
+volumes:
+  postgres-data:
+  redis-data:

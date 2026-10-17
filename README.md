@@ -68,6 +68,28 @@ pip install -r ml/requirements.txt
 
 PyTorch installs from the CPU-only wheel index (set at the top of `backend/requirements.txt`).
 
+## Local infrastructure
+PostgreSQL 16, Redis 7 and MLflow run in Docker; the API, worker and web app run on your machine.
+Run these from the repo root (Docker Desktop must show **Engine running**):
+
+| Task | Command |
+|---|---|
+| Start (waits until healthy) | `docker compose --env-file .env -f infra/docker-compose.yml up -d --wait` |
+| Status | `docker compose -f infra/docker-compose.yml ps` |
+| Logs | `docker compose -f infra/docker-compose.yml logs -f mlflow` |
+| Stop (keeps data) | `docker compose -f infra/docker-compose.yml down` |
+
+| Service | Address | Data |
+|---|---|---|
+| PostgreSQL | `localhost:5432` (user/db/password from `.env`) | named volume `postgres-data` |
+| Redis | `localhost:6379` (append-only file on) | named volume `redis-data` |
+| MLflow UI | http://localhost:5000 | `./mlruns` in the repo (git-ignored) |
+
+Ports listen on `127.0.0.1` only. `--env-file .env` makes Compose read the root `.env`; without it the
+defaults from `.env.example` are used. Postgres reads its user and password only the first time
+it creates the volume, so if you change them in `.env` later, the old ones still apply.
+`down -v` resets them by **deleting the volumes and all their data**.
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

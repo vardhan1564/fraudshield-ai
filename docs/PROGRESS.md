@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P0 Setup
-- **Next task:** T0.2 (A) · T0.4 after T0.3 (B)
+- **Next task:** T0.3 (A) · T0.4 after T0.3 (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
@@ -20,7 +20,7 @@
 ## Tasks
 ### P0 Setup (Week 1)
 - [x] T0.1 Repo scaffold · A
-- [ ] T0.2 Local infrastructure · A
+- [x] T0.2 Local infrastructure · A
 - [ ] T0.3 Backend skeleton · A
 - [ ] T0.4 Basic CI · B
 
@@ -89,4 +89,5 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-17 · A · T0.2 done: postgres:16, redis:7 (AOF), mlflow v3.17.1 all healthy via compose; MLflow 3.x needs MLFLOW_ALLOW_FILE_STORE=true for the ./mlruns file store · next T0.3
 - 2026-10-17 · A · T0.1 done: planned repo layout, pyproject (ruff/mypy strict/pytest), pinned requirements, README; ruff + mypy clean, 14 smoke tests pass · next T0.2 infra
