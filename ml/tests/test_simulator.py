@@ -8,6 +8,7 @@ from pydantic import ValidationError
 from ml.simulator.config import load_config
 from ml.simulator.normal import generate_normal
 from ml.simulator.population import World, build_population
+from ml.simulator.rings import generate_rings
 from ml.simulator.scenarios import fill_to_target, generate_scenarios
 from ml.simulator.schema import CHANNELS, HARD_NEGATIVES, SHARED_SCENARIOS
 
@@ -199,3 +200,60 @@ def test_card_testing_signature(scen: tuple[World, pd.DataFrame]) -> None:
     for _, big in ok.iterrows():  # each big payment follows failed small tests by the same card
         before = failed[(failed["user_id"] == big["user_id"]) & (failed["t"] < big["t"])]
         assert len(before) >= 5 and big["t"] - before["t"].min() < 3600
+
+
+# --- mule rings --------------------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def rings() -> tuple[World, pd.DataFrame]:
+    w = build_population(load_config(n_users=N_USERS), np.random.default_rng(4))
+    return w, generate_rings(w, np.random.default_rng(5))
+
+
+def test_ring_count_and_size(rings: tuple[World, pd.DataFrame]) -> None:
+    world, frame = rings
+    mules = world.users[world.users["is_mule"]]
+    sizes = mules.groupby("ring_id").size()
+    assert len(sizes) == 20 and frame["ring_id"].nunique() == 20
+    assert sizes.between(10, 30).all()
+    assert (frame["scenario"] == "mule_ring").all()
+
+
+def test_ring_payees_are_customer_accounts(rings: tuple[World, pd.DataFrame]) -> None:
+    world, frame = rings
+    mule_vpas = set(world.users.loc[world.users["is_mule"], "vpa"])
+    paid = set(frame["payee_vpa"])
+    assert mule_vpas <= paid  # every mule receives money
+    # Every payee that is a mule is a row in users and in payees with its user_id.
+    linked = world.payees[world.payees["vpa"].isin(mule_vpas)]
+    assert linked["user_id"].notna().all() and len(linked) == len(mule_vpas)
+
+
+def test_ring_fan_in_and_pass_through(rings: tuple[World, pd.DataFrame]) -> None:
+    world, frame = rings
+    vpa_to_user = world.users.set_index("vpa")["user_id"]
+    frame = frame.assign(payee_user=frame["payee_vpa"].map(vpa_to_user))
+    mule_ids = set(world.users.loc[world.users["is_mule"], "user_id"])
+    incoming = frame[frame["payee_user"].isin(mule_ids)]
+    for mule, got in incoming.groupby("payee_user"):
+        sent = frame[frame["user_id"] == mule]
+        assert sent["amount"].sum() >= 0.8 * got["amount"].sum()  # pass-through: > 80% forwarded
+        for t in got["t"]:  # money moves on within 1 h of arriving
+            assert ((sent["t"] > t) & (sent["t"] <= t + 3600)).any()
+    # Collectors (paid by ordinary customers): > 20 distinct senders within 24 h.
+    from_customers = incoming[~incoming["user_id"].isin(mule_ids)]
+    for _, got in from_customers.groupby("payee_user"):
+        assert got["user_id"].nunique() > 20
+        assert got["t"].max() - got["t"].min() < 86_400
+
+
+def test_ring_shared_devices_and_new_accounts(rings: tuple[World, pd.DataFrame]) -> None:
+    world, frame = rings
+    mules = world.users[world.users["is_mule"]]
+    devices = world.devices.merge(mules[["user_id", "ring_id", "created_t"]])
+    per_phone = devices.groupby(["ring_id", "fingerprint"])["user_id"].nunique()
+    assert (per_phone.groupby("ring_id").max() >= 3).all()
+    first_in = frame.groupby("ring_id")["t"].min()
+    age_days = (mules["ring_id"].map(first_in) - mules["created_t"]) / 86_400
+    assert (age_days < 7).groupby(mules["ring_id"]).any().all()  # new accounts in every ring
