@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P0 Setup
-- **Next task:** T0.1 (A) · T0.4 after T0.3 (B)
+- **Next task:** T0.2 (A) · T0.4 after T0.3 (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
@@ -19,7 +19,7 @@
 
 ## Tasks
 ### P0 Setup (Week 1)
-- [ ] T0.1 Repo scaffold · A
+- [x] T0.1 Repo scaffold · A
 - [ ] T0.2 Local infrastructure · A
 - [ ] T0.3 Backend skeleton · A
 - [ ] T0.4 Basic CI · B
@@ -84,6 +84,9 @@
 | 2026-10-17 | Customer app is a React PWA, not Flutter | Team of 1–2, no Flutter experience; device signals simulated anyway |
 | 2026-10-17 | Redis Streams instead of Kafka/Redpanda | One less service; Redis already needed |
 | 2026-10-17 | NetworkX instead of Neo4j (Neo4j optional) | Graph fits in memory; no extra database |
+| 2026-10-17 | Develop on native Windows (PowerShell), WSL2 optional | Lead's machine runs natively; Docker Desktop handles WSL2 itself |
+| 2026-10-17 | One `.venv` at repo root; `ml/requirements.txt` includes `backend/requirements.txt` | Solo-friendly; models trained with the same versions they're served with |
 
 ## Notes
 <!-- newest first -->
+- 2026-10-17 · A · T0.1 done: planned repo layout, pyproject (ruff/mypy strict/pytest), pinned requirements, README; ruff + mypy clean, 14 smoke tests pass · next T0.2 infra

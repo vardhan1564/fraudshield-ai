@@ -1,0 +1,46 @@
+# Runtime dependencies for the API and the worker.
+# Install: pip install -r backend/requirements.txt
+# CPU-only PyTorch wheels (smaller; Windows wheels from PyPI are CPU-only anyway).
+--extra-index-url https://download.pytorch.org/whl/cpu
+
+# API
+fastapi==0.143.3
+uvicorn[standard]==0.54.0
+pydantic==2.14.1
+pydantic-settings==2.16.0
+python-multipart==0.0.32
+orjson==3.13.0
+
+# Database
+sqlalchemy[asyncio]==2.1.5
+asyncpg==0.32.0
+alembic==1.20.0
+
+# Redis (live features, caches, streams, pub/sub)
+redis==8.1.0
+
+# Worker jobs
+apscheduler==3.11.3
+
+# Auth
+pyjwt==2.15.1
+bcrypt==5.0.0
+
+# LLM + HTTP
+anthropic==1.15.0
+httpx==0.28.1
+
+# Observability
+prometheus-client==0.26.0
+python-json-logger==4.2.0
+
+# Model runtime (scoring path + graph job)
+numpy==2.4.6
+pandas==3.0.6
+scikit-learn==1.9.1
+xgboost==3.2.0
+lightgbm==4.7.0
+shap==0.51.0
+torch==2.14.1
+networkx==3.6.1
+pyyaml==6.0.3

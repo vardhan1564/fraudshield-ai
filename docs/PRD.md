@@ -135,7 +135,7 @@ Priority: **P0** = MVP must-have · **P1** = should-have · **P2** = stretch.
 | Explainability | Reasons on every decision; model card per model |
 | Fairness | Compare FPR across city tier and age band; report gap |
 | Maintainability | Typed code, tests ≥ 70% coverage on backend services, lint clean |
-| Portability | Runs on Windows (WSL2), macOS, Linux with Docker |
+| Portability | Runs on Windows (native PowerShell or WSL2), macOS, Linux with Docker |
 
 ## 8. Decision logic (product rules)
 | Score | Decision | Action | User sees |

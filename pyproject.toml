@@ -1,0 +1,58 @@
+# Tool configuration for the whole repo (backend + ml).
+# Dependencies live in backend/requirements.txt, ml/requirements.txt and requirements-dev.txt.
+
+[project]
+name = "fraudshield-ai"
+version = "0.1.0"
+description = "Real-time fraud detection for Indian digital payments"
+requires-python = ">=3.11,<3.12"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+extend-exclude = ["backend/alembic/versions", "frontend-web", "mlruns"]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "W",   # pycodestyle warnings
+    "F",   # pyflakes
+    "I",   # import order
+    "B",   # bugbear (likely bugs)
+    "UP",  # modern Python syntax
+    "SIM", # simplifications
+]  # "E" includes E722: no bare `except:`
+
+[tool.ruff.lint.isort]
+known-first-party = ["app", "ml"]
+
+[tool.ruff.lint.per-file-ignores]
+"ml/notebooks/*" = ["E402"]
+
+[tool.ruff.format]
+quote-style = "double"
+
+[tool.mypy]
+python_version = "3.11"
+mypy_path = "backend"
+files = ["backend/app"]
+# T0.3: add plugins = ["pydantic.mypy"] once pydantic is installed.
+strict = true
+warn_unreachable = true
+
+[[tool.mypy.overrides]]
+# ML libraries without type stubs.
+module = ["xgboost.*", "lightgbm.*", "shap.*", "sklearn.*", "networkx.*", "torch_geometric.*", "mlflow.*", "evidently.*"]
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["backend/tests", "ml/tests"]
+# Repo root makes `import ml` work; backend/ makes `import app` work.
+pythonpath = [".", "backend"]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+addopts = "-ra"
+
+[tool.coverage.run]
+source = ["backend/app", "ml"]
+omit = ["*/tests/*"]

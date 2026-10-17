@@ -1,0 +1,23 @@
+# Training, evaluation and data tooling. Includes everything the backend runtime needs,
+# so models are trained with the same library versions they are served with.
+# Install: pip install -r ml/requirements.txt
+-r ../backend/requirements.txt
+
+# Data
+pyarrow==25.0.1  # mlflow 3.17 does not accept 26.x yet
+kaggle==2.2.4
+
+# Modelling
+imbalanced-learn==0.14.2
+optuna==5.0.0
+torch-geometric==2.8.1
+transformers==5.20.1
+
+# Tracking + drift
+mlflow==3.17.1
+evidently==0.7.23
+
+# Notebooks + plots
+jupyterlab==4.6.4
+matplotlib==3.11.2
+seaborn==0.13.2
