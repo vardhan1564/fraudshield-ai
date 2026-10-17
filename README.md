@@ -123,6 +123,13 @@ python -m ml.simulator.run --n 20000 --seed 7    # smaller, different random dat
 Takes about 10 s for 100k rows. Settings (scenario shares, rings, cities) are in `ml/simulator/config.yaml`;
 the same seed always gives the same data.
 
+### Features
+```powershell
+python -m ml.features.build    # ml/data/simulated -> ml/data/features/simulated.parquet (38 features + labels)
+```
+Feature names and types live in `ml/features/schema.py`; after changing it, run
+`python -m ml.features.schema` to regenerate `ml/features/features.json`.
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

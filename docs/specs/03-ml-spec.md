@@ -36,6 +36,19 @@ Names below are **exact**; code must use them.
 | Coach | `coach_red_flags` | int | coach answers (0 before coach) |
 | Graph | `graph_score`, `graph_degree`, `graph_pagerank`, `hops_to_fraud`, `community_fraud_ratio` | float | Redis graph cache |
 
+Definitions (T1.3, `ml/features/`; names and dtypes in `schema.py` → `features.json`). The online feature service must match these:
+- "Before" means a strictly earlier timestamp: the payment itself, rows in the same second and rows exactly one window back are not counted. Windows are per user (velocity) or per payee.
+- `amount_ratio_avg`: amount ÷ mean of the user's successful payments in the previous 30 days; 1.0 with no history.
+- `hour`, `weekday`, `is_night`: IST; weekday 0 = Monday; night = 23:00–04:59.
+- Velocity counts include failed attempts; `amount_sum_*` sums their amounts.
+- `payee_is_new`: no earlier *successful* payment from this user to this payee. `payee_report_count`: reports filed before the payment.
+- `payee_reputation`: F7 formula; `confirmed_fraud_cases` and `graph_flag` are 0 until T5.5 / phase 5.
+- `device_is_new`: device first seen < 24 h before the payment (or unknown). `sim_changed_7d`: SIM change within the 7 days up to the payment.
+- `ip_distance_km`: haversine from the payment geo to the user's home geo.
+- `ctx_screen_share`: `screen_share_active` or a remote-access app is open.
+- `merchant_category`: categorical with the fixed list in `schema.py` (P2P + 10 merchant categories).
+- `coach_red_flags` and the graph features are 0 until the Scam Coach (T5.4) and graph (T5.1) exist.
+
 ## 3. Datasets
 | Dataset | Use | Location |
 |---|---|---|

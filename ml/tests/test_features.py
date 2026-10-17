@@ -1,14 +1,29 @@
 """Offline feature builders (spec 03 §2) on a 50-row hand-made fixture with hand-computed values."""
 
 import json
+from pathlib import Path
 
 import numpy as np
 import pandas as pd
 import pytest
 
-from ml.features.schema import DTYPES, FEATURE_NAMES, FEATURES_JSON, to_json
+from ml.features.build import build_features, training_frame
+from ml.features.build import main as build_main
+from ml.features.context import GRAPH_FEATURES, context_features
+from ml.features.device import device_features
+from ml.features.payee import payee_features
+from ml.features.schema import (
+    DTYPES,
+    FEATURE_NAMES,
+    FEATURES_JSON,
+    LABEL_COLUMNS,
+    MERCHANT_CATEGORIES,
+    to_json,
+)
 from ml.features.txn import txn_features
 from ml.features.velocity import velocity_features
+from ml.simulator.config import load_config
+from ml.simulator.run import simulate
 
 T0 = pd.Timestamp("2026-07-01 00:00", tz="+05:30")  # a Wednesday
 MUMBAI, PUNE, DELHI = (19.08, 72.88), (18.52, 73.86), (28.61, 77.21)
@@ -81,7 +96,7 @@ ROWS += [(f"f{i:02d}", "U4", at(25 + i, 12, 0), "grocery.f", 100, {}) for i in r
 def make_transactions() -> pd.DataFrame:
     records = []
     for txn_id, user, ts, payee, amount, extra in ROWS:
-        geo = extra.pop("geo", HOME[user]) if "geo" in extra else HOME[user]
+        geo = extra.get("geo", HOME[user])  # read, never pop: ROWS is shared by every test
         row = {
             "txn_id": txn_id,
             "user_id": user,
@@ -200,3 +215,165 @@ def test_row_order_does_not_matter(txns: pd.DataFrame) -> None:
     a = by_id(velocity_features(txns), txns).sort_index()
     b = by_id(velocity_features(shuffled), shuffled).sort_index()
     pd.testing.assert_frame_equal(a, b)
+
+
+# --- users, devices, reports for the fixture ---------------------------------------------------
+
+
+def make_users() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "user_id": list(HOME),
+            "home_lat": [HOME[u][0] for u in HOME],
+            "home_lon": [HOME[u][1] for u in HOME],
+            "sim_changed_at": [at(10), pd.NaT, pd.NaT, pd.NaT],  # U1: after a1, 6 d before a7
+        }
+    )
+
+
+def make_devices() -> pd.DataFrame:
+    old = at(-100)
+    return pd.DataFrame(
+        {
+            "device_id": ["D1", "D1b", "D1new", "D2", "D3", "D4"],
+            "user_id": ["U1", "U1", "U1", "U2", "U3", "U4"],
+            "is_rooted": [False, True, False, False, False, False],
+            "first_seen": [old, old, at(16, 8, 0), old, old, old],  # D1new: 2 h before a7
+        }
+    )
+
+
+def make_reports() -> pd.DataFrame:
+    return pd.DataFrame(
+        {
+            "payee_vpa": [COLLECTOR, COLLECTOR, COLLECTOR, "shop.d"],
+            # c3 sees 1, c5 sees 2, the third never counts; shop.d's is the same second as a7
+            "ts": [at(20, 11, 30), at(21, 9, 0), at(22), at(16, 10, 0)],
+        }
+    )
+
+
+# --- payee -------------------------------------------------------------------------------------
+
+
+def test_payee_is_new(txns: pd.DataFrame) -> None:
+    f = by_id(payee_features(txns, make_reports()), txns)["payee_is_new"]
+    assert f["a1"] and not f["a2"]
+    assert f["a5"]  # shop.b was only tried (FAILED) before
+    assert f["b1"] and not f["b2"]
+    assert f["f00"] and not f["f01"]
+
+
+def test_payee_unique_senders_and_reports(txns: pd.DataFrame) -> None:
+    f = by_id(payee_features(txns, make_reports()), txns)
+    rows = ["c1", "c2", "c3", "c4", "c5", "c6"]
+    # U2 twice counts once; c4 exactly 24 h before c6 is out.
+    assert f.loc[rows, "payee_unique_senders_24h"].tolist() == [0, 1, 2, 2, 3, 1]
+    assert f.loc[rows, "payee_report_count"].tolist() == [0, 0, 1, 1, 2, 2]
+    assert f.loc["c5", "payee_reputation"] == pytest.approx(0.2)
+    assert f.loc["a7", "payee_report_count"] == 0  # filed the same second, not before
+    assert f.loc["c1", "payee_account_age_days"] == 3
+
+
+# --- device ------------------------------------------------------------------------------------
+
+
+def test_device_features(txns: pd.DataFrame) -> None:
+    f = by_id(device_features(txns, make_users(), make_devices()), txns)
+    assert f.loc["a7", "device_is_new"] and not f.loc["a8", "device_is_new"]
+    assert f.loc["a8", "device_rooted"] and not f.loc["a7", "device_rooted"]
+    assert f.loc["b1", "ip_distance_km"] == pytest.approx(119.5, abs=5)  # Mumbai -> Pune home
+    assert f.loc["a1", "ip_distance_km"] == pytest.approx(0)
+    assert f.loc["a7", "sim_changed_7d"]  # 6 d 10 h after the change
+    assert not f.loc["a8", "sim_changed_7d"]  # 8 d 12 h after
+    assert not f.loc["a1", "sim_changed_7d"]  # the change is in the future
+    assert not f.loc["b1", "sim_changed_7d"]  # never changed
+
+
+# --- context, coach, graph ---------------------------------------------------------------------
+
+
+def test_context_features(txns: pd.DataFrame) -> None:
+    f = by_id(context_features(txns), txns)
+    flags = ["ctx_unknown_call", "ctx_screen_share", "ctx_call_long"]
+    assert f.loc["b1", flags].all()  # unknown caller, AnyDesk, 400 s
+    assert not f.loc["b2", flags].any()  # caller in contacts, exactly 300 s
+    assert f.loc["n3", "ctx_screen_share"]  # screen share without a call
+    assert (f["coach_red_flags"] == 0).all() and (f[GRAPH_FEATURES] == 0).all().all()
+
+
+# --- full frame --------------------------------------------------------------------------------
+
+
+def test_build_contract(txns: pd.DataFrame) -> None:
+    users, devices, reports = make_users(), make_devices(), make_reports()
+    originals = [frame.copy() for frame in (txns, users, devices, reports)]
+    f = build_features(txns, users, devices, reports)
+    assert list(f.columns) == FEATURE_NAMES and len(f) == 50
+    assert f.index.name == "txn_id" and f.index.tolist() == txns["txn_id"].tolist()
+    assert {c: str(t) for c, t in f.dtypes.items()} == DTYPES
+    assert list(f["merchant_category"].cat.categories) == list(MERCHANT_CATEGORIES)
+    assert not f.isna().any().any()
+    assert not set(f.columns) & {"is_fraud", "scenario", "hard_negative", "ring_id", "ts"}
+    # Pure: the inputs are untouched.
+    for after, before in zip((txns, users, devices, reports), originals, strict=True):
+        pd.testing.assert_frame_equal(after, before)
+
+
+def test_training_frame_adds_labels(txns: pd.DataFrame) -> None:
+    f = training_frame(txns, make_users(), make_devices(), make_reports())
+    assert list(f.columns) == FEATURE_NAMES + LABEL_COLUMNS
+
+
+def assert_no_leakage(
+    txns: pd.DataFrame, users: pd.DataFrame, devices: pd.DataFrame, reports: pd.DataFrame
+) -> None:
+    """Features of rows before a cut-off must not change when everything after it is removed."""
+    full = build_features(txns, users, devices, reports)
+    for cut in txns["ts"].quantile([0.3, 0.6], interpolation="nearest"):
+        early = (txns["ts"] < cut).to_numpy()
+        part = build_features(txns[early], users, devices, reports[reports["ts"] < cut])
+        pd.testing.assert_frame_equal(part, full[early])
+
+
+def test_no_future_leakage_on_fixture(txns: pd.DataFrame) -> None:
+    assert_no_leakage(txns, make_users(), make_devices(), make_reports())
+
+
+# --- on simulator output -----------------------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def simulated() -> dict[str, pd.DataFrame]:
+    return simulate(load_config(n_transactions=5000, n_users=500))
+
+
+def test_simulated_features(simulated: dict[str, pd.DataFrame]) -> None:
+    t = simulated["transactions"]
+    f = build_features(t, simulated["users"], simulated["devices"], simulated["reports"])
+    assert list(f.columns) == FEATURE_NAMES and len(f) == len(t)
+    assert not f.isna().any().any()
+    scenario = t["scenario"].to_numpy()
+    assert f.loc[scenario == "digital_arrest", "ctx_unknown_call"].all()
+    ato = f[scenario == "account_takeover"]
+    assert ato["device_is_new"].all() and ato["sim_changed_7d"].all()
+    assert f.loc[scenario == "mule_ring", "payee_unique_senders_24h"].max() > 20
+    assert f.loc[scenario == "fake_support_refund", "payee_report_count"].min() >= 3
+    big_card = (scenario == "card_testing") & (t["status"] == "SUCCESS").to_numpy()
+    assert (f.loc[big_card, "failed_count_1h"] >= 5).all()
+
+
+def test_no_future_leakage_on_simulated(simulated: dict[str, pd.DataFrame]) -> None:
+    assert_no_leakage(
+        simulated["transactions"], simulated["users"], simulated["devices"], simulated["reports"]
+    )
+
+
+def test_cli_writes_parquet(tmp_path: Path, simulated: dict[str, pd.DataFrame]) -> None:
+    for name in ("transactions", "users", "devices", "reports"):
+        simulated[name].to_parquet(tmp_path / f"{name}.parquet", index=False)
+    out = tmp_path / "features.parquet"
+    assert build_main(["--in", str(tmp_path), "--out", str(out)]) == 0
+    back = pd.read_parquet(out)
+    assert list(back.columns) == FEATURE_NAMES + LABEL_COLUMNS
+    assert back["merchant_category"].dtype == "category"

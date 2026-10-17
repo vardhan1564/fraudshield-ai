@@ -2,7 +2,10 @@
 
 Rows are sorted once by (key, time) into a single int64 sort key, so each window is two binary
 searches and a difference of cumulative sums: O(n log n), no Python loop per row.
+Distinct counts can't use sums, so distinct_count() slides a window per key instead.
 """
+
+from collections import Counter, deque
 
 import numpy as np
 import pandas as pd
@@ -28,11 +31,10 @@ class Windows:
         # Events are (keys, ts); queries default to the same rows.
         query_keys = keys if query_keys is None else query_keys
         query_ts = ts if query_ts is None else query_ts
-        codes, uniques = pd.factorize(pd.concat([keys, query_keys], ignore_index=True))
+        codes, _ = pd.factorize(pd.concat([keys, query_keys], ignore_index=True))
         t = np.concatenate([seconds(ts), seconds(query_ts)])
         t = t - t.min() if len(t) else t
         span = int(t.max()) + 1 if len(t) else 1
-        self._span = span
         key = codes.astype("int64") * span + t
         n = len(keys)
         self._order = np.argsort(key[:n], kind="stable")
@@ -62,3 +64,40 @@ class Windows:
             lo, hi = self._bounds(window_s)
             return (hi - lo).astype("int64")
         return np.rint(self.sum(np.asarray(mask, dtype="float64"), window_s)).astype("int64")
+
+
+def distinct_count(keys: pd.Series, values: pd.Series, ts: pd.Series, window_s: int) -> np.ndarray:
+    """Distinct `values` per key among rows strictly earlier and within window_s (open ends).
+
+    A sliding window per key (deque + counter), so O(n) with one Python loop over the rows.
+    """
+    t = seconds(ts)
+    key_codes = pd.factorize(keys)[0]
+    value_codes = pd.factorize(values)[0]
+    order = np.lexsort((t, key_codes))
+    out = np.zeros(len(t), dtype="int64")
+    counts: Counter[int] = Counter()
+    recent: deque[tuple[int, int]] = deque()
+    current_key = -1
+    i, n = 0, len(order)
+    while i < n:
+        row = order[i]
+        if key_codes[row] != current_key:  # new key: start an empty window
+            current_key = key_codes[row]
+            counts.clear()
+            recent.clear()
+        now = t[row]
+        j = i  # rows with the same key and timestamp see the same window
+        while j < n and key_codes[order[j]] == current_key and t[order[j]] == now:
+            j += 1
+        while recent and recent[0][0] <= now - window_s:  # drop rows at or before t - window
+            _, old = recent.popleft()
+            counts[old] -= 1
+            if counts[old] == 0:
+                del counts[old]
+        out[order[i:j]] = len(counts)
+        for k in order[i:j]:
+            recent.append((now, value_codes[k]))
+            counts[value_codes[k]] += 1
+        i = j
+    return out
