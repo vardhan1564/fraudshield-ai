@@ -9,8 +9,15 @@ from ml.simulator.config import load_config
 from ml.simulator.normal import generate_normal
 from ml.simulator.population import World, build_population
 from ml.simulator.rings import generate_rings
+from ml.simulator.run import main, simulate
 from ml.simulator.scenarios import fill_to_target, generate_scenarios
-from ml.simulator.schema import CHANNELS, HARD_NEGATIVES, SHARED_SCENARIOS
+from ml.simulator.schema import (
+    CHANNELS,
+    HARD_NEGATIVES,
+    OUTPUT_COLUMNS,
+    SCENARIOS,
+    SHARED_SCENARIOS,
+)
 
 N_USERS = 500
 
@@ -257,3 +264,75 @@ def test_ring_shared_devices_and_new_accounts(rings: tuple[World, pd.DataFrame])
     first_in = frame.groupby("ring_id")["t"].min()
     age_days = (mules["ring_id"].map(first_in) - mules["created_t"]) / 86_400
     assert (age_days < 7).groupby(mules["ring_id"]).any().all()  # new accounts in every ring
+
+
+# --- full run: python -m ml.simulator.run --n 5000 ---------------------------------------------
+
+FULL_N = 5000
+
+
+@pytest.fixture(scope="module")
+def out(tmp_path_factory: pytest.TempPathFactory) -> dict[str, pd.DataFrame]:
+    out_dir = tmp_path_factory.mktemp("simulated")
+    assert main(["--n", str(FULL_N), "--users", str(N_USERS), "--out", str(out_dir)]) == 0
+    return {name: pd.read_parquet(out_dir / f"{name}.parquet") for name in OUTPUT_COLUMNS}
+
+
+def test_five_files_with_spec_columns(out: dict[str, pd.DataFrame]) -> None:
+    for name, columns in OUTPUT_COLUMNS.items():
+        assert list(out[name].columns) == columns, name
+    assert len(out["transactions"]) == FULL_N
+
+
+def test_label_shares_match_spec(out: dict[str, pd.DataFrame]) -> None:
+    txns, shares = out["transactions"], load_config().shares
+    counts = txns["scenario"].value_counts()
+    for name in SHARED_SCENARIOS:
+        assert counts[name] / FULL_N == pytest.approx(shares[name], rel=0.2), name
+    assert set(txns["scenario"].dropna()) == set(SCENARIOS)
+    assert (txns["is_fraud"] == txns["scenario"].notna()).all()
+    assert not txns.loc[txns["hard_negative"].notna(), "is_fraud"].any()
+
+
+def test_twenty_rings_of_customer_accounts(out: dict[str, pd.DataFrame]) -> None:
+    txns, users = out["transactions"], out["users"]
+    assert txns["ring_id"].nunique() == 20
+    assert users.loc[users["is_mule"]].groupby("ring_id").size().between(10, 30).all()
+    mule_vpas = set(users.loc[users["is_mule"], "vpa"])
+    to_mules = txns[txns["payee_vpa"].isin(mule_vpas)]
+    assert to_mules["payee_user_id"].notna().all()
+    assert set(to_mules["payee_user_id"]) <= set(users["user_id"])
+
+
+def test_transactions_are_consistent(out: dict[str, pd.DataFrame]) -> None:
+    txns = out["transactions"]
+    assert txns["txn_id"].is_unique and txns["txn_id"].str.match(r"^TXN-\d{8}-\d{6}$").all()
+    assert txns["ts"].is_monotonic_increasing
+    assert (txns["amount"] > 0).all() and (txns["currency"] == "INR").all()
+    assert set(txns["user_id"]) <= set(out["users"]["user_id"])
+    assert set(txns["device_id"]) <= set(out["devices"]["device_id"])
+    assert (txns["payee_account_age_days"] >= 0).all()
+    start = pd.Timestamp(load_config().start)
+    assert txns["ts"].min() >= start and txns["ts"].max() < start + pd.Timedelta(days=90)
+
+
+def test_edges_and_reports(out: dict[str, pd.DataFrame]) -> None:
+    edges, txns, reports = out["edges"], out["transactions"], out["reports"]
+    assert set(edges["edge_type"]) == {"SENT", "USED_DEVICE", "LOGGED_FROM"}
+    assert (edges["edge_type"] == "SENT").sum() == len(txns)
+    assert reports["report_id"].is_unique and len(reports) > 0
+    assert reports["ts"].is_monotonic_increasing
+
+
+def test_same_seed_same_data_other_seed_differs() -> None:
+    cfg = load_config(n_transactions=FULL_N, n_users=N_USERS)
+    a, b = simulate(cfg), simulate(cfg)
+    for name in OUTPUT_COLUMNS:
+        pd.testing.assert_frame_equal(a[name], b[name])
+    c = simulate(load_config(n_transactions=FULL_N, n_users=N_USERS, seed=7))
+    assert not a["transactions"]["amount"].equals(c["transactions"]["amount"])
+
+
+def test_too_small_n_is_rejected() -> None:
+    with pytest.raises(ValueError, match="too small"):
+        simulate(load_config(n_transactions=1000, n_users=N_USERS))

@@ -4,8 +4,8 @@
 > Note format: `YYYY-MM-DD · A/B · one-line result · next step`
 
 ## Current status
-- **Phase:** P0 Setup
-- **Next task:** T0.4 (B, needs GitHub repo) · T1.2 UPI simulator (A)
+- **Phase:** P1 Data
+- **Next task:** T1.3 Feature builders (A) · T0.4 still needs the GitHub repo (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
@@ -26,7 +26,7 @@
 
 ### P1 Data (Weeks 1–2)
 - [x] T1.1 Dataset download + EDA · A
-- [ ] T1.2 UPI simulator · A
+- [x] T1.2 UPI simulator · A
 - [ ] T1.3 Feature builders · A
 
 ### P2 Core ML (Weeks 3–5)
@@ -89,6 +89,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-17 · A · T1.2 done: ml/simulator (config.yaml, population, normal + 4 hard-negative types, 5 scenarios with exact shares, 20 mule rings built to trip all 4 F3 detectors, 5 parquet files). 100k rows in 8.4 s / 225 MB; fraud 2.87% (1,470 ring rows, 403 mules). 26 simulator tests (signatures, rings, determinism). Spec 03 §4 notes added (no payees file; payee facts on each txn) · next T1.3
 - 2026-10-17 · A · T1.1 done: all 4 datasets in ml/data/raw (ieee 1.3G, elliptic 666M, paysim 471M, ulb 144M). IEEE train: 590,540 rows x 434 cols, fraud 3.50% (7.85% with identity vs 2.09% without, identity on 24.4%); 212 cols >50% missing; top corr V257 +0.38, V246, V244, V242 (all ~78% missing); fraud rate peaks ~10.6% at relative hour 7 (low-volume hours); fraud has extra mass < $1 (card testing). Notebook keeps txn/identity unmerged (merge OOM'd with ~1.6 GB free). Script accepts new Kaggle API tokens (~/.kaggle/access_token). Elliptic is CC BY-NC-ND: fine for this non-commercial project · next T1.2
 - 2026-10-17 · A · T1.1 part 1: scripts/download_data.sh (Git Bash on Windows; validates names, skips finished sets) + 01_eda_ieee.ipynb (float32 load for 8 GB RAM), executed OK on fake IEEE-shaped data; ml/requirements installed · next: kaggle.json + accept IEEE rules, download, run notebook, record numbers here
 - 2026-10-17 · B · T0.4 workflow: python-lint → python-test with postgres/redis services and pip cache; service connectivity tests fail in CI instead of skipping; URLs switched to 127.0.0.1 (localhost cost ~2 s per connection on Windows) · next: create GitHub repo + push to verify

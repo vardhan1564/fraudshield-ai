@@ -115,6 +115,14 @@ Raw data goes to `ml/data/raw/<name>/` (git-ignored, about 3 GB in total).
 
 EDA: `jupyter lab ml/notebooks/01_eda_ieee.ipynb` (reads ~1 GB into memory as float32).
 
+### Simulated UPI data
+```powershell
+python -m ml.simulator.run --n 100000            # writes 5 parquet files to ml/data/simulated/
+python -m ml.simulator.run --n 20000 --seed 7    # smaller, different random data
+```
+Takes about 10 s for 100k rows. Settings (scenario shares, rings, cities) are in `ml/simulator/config.yaml`;
+the same seed always gives the same data.
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

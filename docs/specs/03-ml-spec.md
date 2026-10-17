@@ -63,6 +63,13 @@ Download via Kaggle CLI (`kaggle competitions download -c ieee-fraud-detection`)
 - Hard negatives: legit big payments (rent, fees), legit new payees, legit night txns.
 - Output: `transactions.parquet`, `users.parquet`, `devices.parquet`, `edges.parquet`, `reports.parquet`.
 
+Implementation notes (T1.2, `ml/simulator/`; column lists in `schema.py`):
+- `--n` is the total number of transaction rows; shares above are shares of those rows and are hit exactly (the last incident of each scenario is sized to fit). `--users` overrides the 10,000 customers.
+- Mule-ring rows are extra rows, not a share. Every ring is built to trip the F3 rule detectors: 1–3 collectors each paid by 22–35 distinct customers within 24 h, 85–97% forwarded within 1 h through two layers to a cash-out wallet, ≥ 3 accounts per shared phone, about half the accounts opened < 7 days before. Mules are rows in `users` (`is_mule`, `ring_id`) and payees with `payee_user_id` set.
+- There is no payees file: `transactions` carries `payee_user_id` and `payee_account_age_days` at payment time, and `reports.parquet` has timestamps, so report counts can be computed without looking into the future. About 2% of reports are false reports against legit payees.
+- Extra ground-truth columns on `transactions`: `is_fraud`, `hard_negative` (`big_legit`, `new_payee_legit`, `night_legit`, `call_legit`), `ring_id`, plus `status` (SUCCESS/FAILED) for `failed_count_1h`. Context and behaviour columns use the spec 04 request names. Ground-truth columns must never be model features.
+- `edges.parquet` has the same columns as the `graph_edges` table (spec 05).
+
 ## 5. Training protocol
 - Split by **time** (train first 70%, val next 15%, test last 15%) — never random split.
 - Imbalance: `scale_pos_weight` (XGBoost) or class weights; SMOTE only inside CV folds.
