@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P2 Core ML
-- **Next task:** T2.4 Social-engineering model (A)
+- **Next task:** T2.5 Meta-model + thresholds (A)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
@@ -33,7 +33,7 @@
 - [x] T2.1 Transaction model baseline · A
 - [x] T2.2 Tuning + SHAP + model card · A
 - [x] T2.3 Anomaly model · A
-- [ ] T2.4 Social-engineering model · A
+- [x] T2.4 Social-engineering model · A
 - [ ] T2.5 Meta-model + thresholds · A
 - [ ] T2.6 Evaluation report (Gate A) · A
 
@@ -89,6 +89,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-18 · A · T2.4 done + simulator realism pass. social_model.py: LightGBM on 10 context/payee/coach/amount-ratio features, target = DA/FSR/IT; first pass (no coach) marks STEP_UP range at 5% FPR, 50% of those train rows get simulated 2-3 question coach answers. Test recall @1% FPR before -> after coach: digital_arrest 93.1% -> 98.3%, fake_support_refund 100%, investment_task 82.4% (all >= 80%). Before the realism pass payee_account_age_days made 96% of decisions and ctx_unknown_call 0%; now context + coach ~75%, account age 12%. Realism: young legit shops/customers, aged scam payees, legit unknown calls/screen share/remote apps, legit phone switches. Retrained: txn_model v2 (val PR-AUC 0.927, test 0.997, FPR gap 0.73/0.32 pt), anomaly now keeps the autoencoder (val ATO 100% vs IF 91.7%). For T2.5: ctx_unknown_call alone moves social score only 0.001 -> 0.003 (screen share dominates); spec F2 wants >= 0.2 on the final risk score, so design the meta-model/rules for it · next T2.5
 - 2026-10-18 · A · T2.3 done: ml/models/anomaly_model.py (14 behaviour/device/velocity features, log1p + scaler fitted on train-legit; Isolation Forest 200 trees vs autoencoder 14-8-4-8-14 with early stopping; raw score min-max on validation -> 0-1; threshold 1% FPR on val). Kept Isolation Forest: val ATO recall 97.5% vs 90.0% (test ATO 100%, card_testing 94%, digital_arrest 46%, mule_ring 5%: expected, those are the real user on their own phone). Saved ml/artifacts/anomaly_model.pt (git-ignored like all .pt) with scaler; MLflow experiment anomaly_model. mlflow_client() helper shared with train.py · next T2.4
 - 2026-10-18 · A · T2.2 done: ml/pipelines/tune.py (Optuna TPE 30 trials, exact val PR-AUC objective, median pruning; data binned once and shared by trials). Served model ml/artifacts/txn_model.json (+ meta: threshold 0.00311, features, metrics), MLflow registry txn_model v1, SHAP summary (XGBoost TreeSHAP) in MLflow, MODEL_CARD.md generated. Simulated test PR-AUC 0.9994, all scenarios 100%, FPR gap city_tier 0.71 pt / age_band 0.59 pt. SHAP confirms payee_account_age_days dominates (mean |SHAP| 4.3 vs 1.4 next): simulator realism pass still recommended. IEEE tuning supported (--dataset ieee --timeout) but ~15 min/trial, not run yet · next T2.3
 - 2026-10-18 · A · T2.1 done: ml/pipelines (config.yaml, split.py time 70/15/15, metrics.py, datasets.py, train.py; XGBoost hist + scale_pos_weight, early stopping on val PR-AUC, threshold at 1% FPR on val). MLflow runs in `txn_model`. Simulated (14-day warm-up): test PR-AUC 0.999, all scenarios 100% recall (simulator too easy, see below). IEEE (431 cols, 15 min, peak 3.1 GB with page file): test PR-AUC 0.470, ROC-AUC 0.868, recall@1%FPR 0.393; best iteration 1855 of 2000 (still improving). Fixed a simulator leak (fraud rows had exact home GPS -> ip_distance_km == 0). Follow-ups: (1) Gate A PR-AUC > 0.80 on IEEE looks unrealistic for a time split (Kaggle winners ~0.93-0.95 ROC-AUC); IEEE needs feature engineering (card/address uid aggregates, frequency encodings) + tuning in T2.2, then decide the target at T2.6; (2) make the simulator harder (legit young payees, legit screen-share/unknown calls, aged mule accounts) so simulated metrics mean something · next T2.2

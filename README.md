@@ -150,6 +150,11 @@ takeover) to `ml/artifacts/anomaly_model.pt`, git-ignored, so re-run it after a 
 python -m ml.models.anomaly_model   # ~15 s
 ```
 
+Social-engineering model (LightGBM; simulated Scam Coach answers) to `ml/artifacts/social_model.txt`:
+```powershell
+python -m ml.models.social_model    # ~10 s
+```
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

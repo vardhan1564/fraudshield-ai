@@ -9,37 +9,37 @@ Scores every payment (UPI, card, wallet) for general fraud patterns. Its output 
 HOLD decision. Every score is explained with SHAP reasons (spec 03 §7).
 
 ## Training data
-- Simulated UPI data (`ml/simulator`, seed 42): 84,779 payments after a 14-day warm-up (features need history).
-- Time split 70/15/15: train 59,345, validation 12,717, test 12,717 rows. Fraud rate in test 2.3%.
-- Training data hash: `561acbaacb8aae30`.
+- Simulated UPI data (`ml/simulator`, seed 42): 84,725 payments after a 14-day warm-up (features need history).
+- Time split 70/15/15: train 59,307, validation 12,709, test 12,709 rows. Fraud rate in test 2.2%.
+- Training data hash: `6d2f3758d379b4e2`.
 
 ## Features
 38 features, exactly the spec 03 §2 contract (`ml/features/features.json`). Graph features and `coach_red_flags` are still 0 (phase 5). Most important by mean |SHAP| on the test set:
 
 | Rank | Feature | Mean \|SHAP\| |
 |---|---|---|
-| 1 | `payee_account_age_days` | 4.282 |
-| 2 | `merchant_category` | 1.400 |
-| 3 | `amount` | 1.017 |
-| 4 | `amount_log` | 0.640 |
-| 5 | `device_is_new` | 0.339 |
-| 6 | `amount_ratio_avg` | 0.304 |
-| 7 | `payee_unique_senders_24h` | 0.292 |
-| 8 | `hour` | 0.213 |
-| 9 | `payee_is_new` | 0.142 |
-| 10 | `login_to_pay_s` | 0.106 |
+| 1 | `merchant_category` | 1.983 |
+| 2 | `payee_account_age_days` | 1.942 |
+| 3 | `amount` | 1.494 |
+| 4 | `amount_ratio_avg` | 0.414 |
+| 5 | `payee_unique_senders_24h` | 0.318 |
+| 6 | `hour` | 0.289 |
+| 7 | `payee_reputation` | 0.275 |
+| 8 | `device_is_new` | 0.274 |
+| 9 | `amount_log` | 0.202 |
+| 10 | `payee_is_new` | 0.191 |
 
-SHAP summary plot: MLflow artifact `shap_summary.png` (run `bea42a7a69e044dea990988ac6ad496e`).
+SHAP summary plot: MLflow artifact `shap_summary.png` (run `fb9a87d9aa0c4531a87b46fe9b8b05be`).
 
 ## Metrics (test split)
 | Metric | Validation | Test | Spec target |
 |---|---|---|---|
-| PR-AUC | 0.9993 | 0.9994 | > 0.80 (IEEE-CIS) |
-| ROC-AUC | 1.0000 | 1.0000 | > 0.92 |
-| Recall @ 1% FPR | 1.0000 | 1.0000 | > 70% |
-| F1 @ HOLD threshold | 0.7987 | 0.8110 | report |
-| Recall @ HOLD threshold | 1.0000 | 1.0000 |  |
-| FPR @ HOLD threshold | 0.0099 | 0.0110 | ≤ 1% (val) |
+| PR-AUC | 0.9270 | 0.9968 | > 0.80 (IEEE-CIS) |
+| ROC-AUC | 0.9934 | 0.9999 | > 0.92 |
+| Recall @ 1% FPR | 0.9081 | 1.0000 | > 70% |
+| F1 @ HOLD threshold | 0.7741 | 0.8379 | report |
+| Recall @ HOLD threshold | 0.9081 | 1.0000 |  |
+| FPR @ HOLD threshold | 0.0100 | 0.0085 | ≤ 1% (val) |
 
 Recall per scenario at the HOLD threshold (target ≥ 80% each):
 
@@ -53,24 +53,24 @@ Recall per scenario at the HOLD threshold (target ≥ 80% each):
 | mule_ring | 100.0% |
 
 ## Thresholds
-- HOLD: score > **0.003110**, chosen on validation for FPR ≤ 1% (spec 03 §5) and applied unchanged to test.
+- HOLD: score > **0.092901**, chosen on validation for FPR ≤ 1% (spec 03 §5) and applied unchanged to test.
 - STEP_UP (FPR ≤ 5%) is set on the calibrated `meta_model` score in T2.5, not here.
 
 ## Tuning
-Optuna TPE, 30 trials, objective = PR-AUC on validation (best 0.9993); median pruning. Best parameters:
+Optuna TPE, 30 trials, objective = PR-AUC on validation (best 0.9270); median pruning. Best parameters:
 
 | Parameter | Value |
 |---|---|
-| `eta` | 0.08773 |
-| `max_depth` | 10 |
-| `min_child_weight` | 2.101 |
-| `subsample` | 0.9382 |
-| `colsample_bytree` | 0.6459 |
-| `gamma` | 0.001817 |
-| `lambda` | 0.2189 |
-| `alpha` | 0.008501 |
-| `best_iteration` | 107 |
-| `scale_pos_weight` | 28.3 |
+| `eta` | 0.1627 |
+| `max_depth` | 7 |
+| `min_child_weight` | 2.45 |
+| `subsample` | 0.9252 |
+| `colsample_bytree` | 0.8945 |
+| `gamma` | 0.003331 |
+| `lambda` | 0.004106 |
+| `alpha` | 0.008882 |
+| `best_iteration` | 58 |
+| `scale_pos_weight` | 29.4 |
 
 ## Limitations
 - Trained on simulated data. The scam signatures are cleaner than real life, so the near-perfect simulated scores overstate real performance; the IEEE-CIS benchmark is the realistic reference.
@@ -83,11 +83,11 @@ False-positive rate gap between groups on the test split at the HOLD threshold (
 
 | Group | FPR gap (points) | Within target |
 |---|---|---|
-| city_tier | 0.71 | yes |
-| age_band | 0.59 | yes |
+| city_tier | 0.73 | yes |
+| age_band | 0.32 | yes |
 
 ## Version
-`1` (MLflow model registry `txn_model`); artifact `ml/artifacts/txn_model.json` + `txn_model.meta.json`.
+`2` (MLflow model registry `txn_model`); artifact `ml/artifacts/txn_model.json` + `txn_model.meta.json`.
 
 ## Date
 2026-10-18

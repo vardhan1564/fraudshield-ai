@@ -1,48 +1,48 @@
 {
   "model": "txn_model",
   "dataset": "simulated",
-  "version": "1",
+  "version": "2",
   "trained_on": "2026-10-18",
-  "threshold": 0.003110319608822465,
-  "best_iteration": 107,
+  "threshold": 0.09290127456188202,
+  "best_iteration": 58,
   "params": {
-    "eta": 0.0877290490543608,
-    "max_depth": 10,
-    "min_child_weight": 2.101070708007134,
-    "subsample": 0.9382334606582741,
-    "colsample_bytree": 0.645948704552091,
+    "eta": 0.1627403961338764,
+    "max_depth": 7,
+    "min_child_weight": 2.4499927893616333,
+    "subsample": 0.9251857997159095,
+    "colsample_bytree": 0.8945360008282194,
     "tree_method": "hist",
     "max_bin": 256,
     "eval_metric": "aucpr",
-    "gamma": 0.0018173685675701324,
-    "lambda": 0.21888616137137187,
-    "alpha": 0.008501230440716153,
+    "gamma": 0.003330987736879571,
+    "lambda": 0.004105675490995816,
+    "alpha": 0.008882475363680366,
     "objective": "binary:logistic",
-    "scale_pos_weight": 28.335145823035095,
+    "scale_pos_weight": 29.398257303946693,
     "seed": 42
   },
   "optuna": {
     "trials": 30,
-    "best_val_pr_auc": 0.9992766667151157
+    "best_val_pr_auc": 0.9270199235473104
   },
   "metrics": {
     "val": {
-      "pr_auc": 0.9992766667151157,
-      "roc_auc": 0.9999850058640111,
-      "recall_at_1pct_fpr": 1.0,
-      "f1": 0.7987012987012987,
-      "recall": 1.0,
-      "fpr": 0.009943067917568759,
-      "fraud_rate": 0.01934418494928049
+      "pr_auc": 0.9270199235473104,
+      "roc_auc": 0.9933611218697374,
+      "recall_at_1pct_fpr": 0.9081272084805654,
+      "f1": 0.7740963855421686,
+      "recall": 0.9081272084805654,
+      "fpr": 0.009979076130693708,
+      "fraud_rate": 0.022267684318199702
     },
     "test": {
-      "pr_auc": 0.9993718449963224,
-      "roc_auc": 0.999983298479176,
+      "pr_auc": 0.9968351552841307,
+      "roc_auc": 0.9999187013345309,
       "recall_at_1pct_fpr": 1.0,
-      "f1": 0.8110344827586207,
+      "f1": 0.8379204892966361,
       "recall": 1.0,
-      "fpr": 0.011027932061498833,
-      "fraud_rate": 0.02311866006133522
+      "fpr": 0.0085243264977885,
+      "fraud_rate": 0.02155952474624282
     }
   },
   "scenario_recall": {
@@ -54,14 +54,14 @@
     "mule_ring": 1.0
   },
   "fairness_fpr_gap_points": {
-    "city_tier": 0.7145858314678322,
-    "age_band": 0.5949025006737907
+    "city_tier": 0.7317555376549567,
+    "age_band": 0.32348177058959765
   },
-  "data_hash": "561acbaacb8aae30",
+  "data_hash": "6d2f3758d379b4e2",
   "sizes": {
-    "train": 59345,
-    "val": 12717,
-    "test": 12717
+    "train": 59307,
+    "val": 12709,
+    "test": 12709
   },
   "features": {
     "version": 1,
@@ -271,5 +271,5 @@
       "RENT"
     ]
   },
-  "mlflow_run_id": "bea42a7a69e044dea990988ac6ad496e"
+  "mlflow_run_id": "fb9a87d9aa0c4531a87b46fe9b8b05be"
 }

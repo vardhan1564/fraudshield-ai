@@ -1,0 +1,84 @@
+{
+  "model": "social_model",
+  "features": [
+    "payee_is_new",
+    "payee_account_age_days",
+    "payee_unique_senders_24h",
+    "payee_reputation",
+    "payee_report_count",
+    "ctx_unknown_call",
+    "ctx_screen_share",
+    "ctx_call_long",
+    "coach_red_flags",
+    "amount_ratio_avg"
+  ],
+  "threshold": 0.1628174724322395,
+  "step_up_threshold": 0.02040303528585428,
+  "best_iteration": 59,
+  "metrics": {
+    "before": {
+      "val": {
+        "pr_auc": 0.7687322676247436,
+        "roc_auc": 0.9510756747374816,
+        "recall_at_1pct_fpr": 0.7608695652173914,
+        "f1": 0.623608017817372,
+        "recall": 0.7608695652173914,
+        "fpr": 0.00998003992015968,
+        "fraud_rate": 0.01447792902667401
+      },
+      "test": {
+        "pr_auc": 0.9340155974438912,
+        "roc_auc": 0.9908759283529925,
+        "recall_at_1pct_fpr": 0.9357798165137615,
+        "f1": 0.6666666666666666,
+        "recall": 0.9357798165137615,
+        "fpr": 0.00753968253968254,
+        "fraud_rate": 0.00857659926036667
+      }
+    },
+    "after": {
+      "val": {
+        "pr_auc": 0.8320243099136814,
+        "roc_auc": 0.9595619630304608,
+        "recall_at_1pct_fpr": 0.8369565217391305,
+        "f1": 0.6652267818574514,
+        "recall": 0.8369565217391305,
+        "fpr": 0.00998003992015968,
+        "fraud_rate": 0.01447792902667401
+      },
+      "test": {
+        "pr_auc": 0.9292557876926674,
+        "roc_auc": 0.9923525557011796,
+        "recall_at_1pct_fpr": 0.963302752293578,
+        "f1": 0.660377358490566,
+        "recall": 0.963302752293578,
+        "fpr": 0.008253968253968255,
+        "fraud_rate": 0.00857659926036667
+      }
+    }
+  },
+  "scenario_recall": {
+    "before": {
+      "digital_arrest": 0.9310344827586207,
+      "fake_support_refund": 1.0,
+      "investment_task": 0.8235294117647058,
+      "account_takeover": 0.2,
+      "card_testing": 0.0,
+      "mule_ring": 0.007751937984496124
+    },
+    "after": {
+      "digital_arrest": 0.9827586206896551,
+      "fake_support_refund": 1.0,
+      "investment_task": 0.8235294117647058,
+      "account_takeover": 0.2,
+      "card_testing": 0.0,
+      "mule_ring": 0.015503875968992248
+    }
+  },
+  "coach": {
+    "train_step_up_rows": 4747,
+    "train_coached_rows": 2405,
+    "train_rows_with_red_flag": 410
+  },
+  "data_hash": "6ff17ea28596fdfc"
+}
