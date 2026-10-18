@@ -7,6 +7,7 @@ python -m ml.pipelines.train --dataset ieee
 import argparse
 import hashlib
 import os
+import sys
 import time
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -193,6 +194,9 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--config", type=Path, default=DEFAULT_CONFIG)
     parser.add_argument("--no-mlflow", action="store_true", help="train and print only")
     args = parser.parse_args(argv)
+    # MLflow prints emoji; the Windows console (cp1252) would crash on them.
+    if hasattr(sys.stdout, "reconfigure"):
+        sys.stdout.reconfigure(encoding="utf-8", errors="replace")
 
     cfg = yaml.safe_load(args.config.read_text(encoding="utf-8"))
     name = args.dataset or cfg["dataset"]

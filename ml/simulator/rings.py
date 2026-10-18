@@ -10,6 +10,7 @@ import pandas as pd
 
 from ml.simulator.population import (
     DAY,
+    GPS_NOISE_DEG,
     HOUR,
     World,
     fingerprints,
@@ -190,6 +191,7 @@ def _ring(world: World, rng: np.random.Generator, ring_id: str) -> pd.DataFrame:
     cols = {k: np.array([r[k] for r in rows], dtype=object) for k in rows[0]}
     cols["t"] = cols["t"].astype("int64")
     cols["amount"] = cols["amount"].astype(float)
-    cols["geo_lat"] = cols["geo_lat"].astype(float)
-    cols["geo_lon"] = cols["geo_lon"].astype(float)
+    # Same GPS jitter as normal payments (exact home coordinates would give fraud away).
+    cols["geo_lat"] = cols["geo_lat"].astype(float) + rng.normal(0, GPS_NOISE_DEG, size=len(rows))
+    cols["geo_lon"] = cols["geo_lon"].astype(float) + rng.normal(0, GPS_NOISE_DEG, size=len(rows))
     return txn_frame(rng, **cols, scenario="mule_ring", ring_id=ring_id)

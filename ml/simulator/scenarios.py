@@ -9,7 +9,15 @@ from collections.abc import Callable
 import numpy as np
 import pandas as pd
 
-from ml.simulator.population import DAY, HOUR, World, fingerprints, random_ips, txn_frame
+from ml.simulator.population import (
+    DAY,
+    GPS_NOISE_DEG,
+    HOUR,
+    World,
+    fingerprints,
+    random_ips,
+    txn_frame,
+)
 from ml.simulator.schema import REMOTE_ACCESS_APPS, SHARED_SCENARIOS
 
 MINUTE = 60
@@ -83,19 +91,19 @@ def report(
 def far_city(world: World, rng: np.random.Generator, k: int) -> tuple[np.ndarray, np.ndarray]:
     cities = world.cfg.cities
     pick = rng.choice(len(cities), size=k)
-    lat = np.array([cities[i].lat for i in pick]) + rng.normal(0, 0.02, size=k)
-    lon = np.array([cities[i].lon for i in pick]) + rng.normal(0, 0.02, size=k)
+    lat = np.array([cities[i].lat for i in pick]) + rng.normal(0, GPS_NOISE_DEG, size=k)
+    lon = np.array([cities[i].lon for i in pick]) + rng.normal(0, GPS_NOISE_DEG, size=k)
     return lat, lon
 
 
-def home(v: pd.Series, k: int) -> dict[str, object]:
-    """Victim's own phone, network and location."""
+def home(rng: np.random.Generator, v: pd.Series, k: int) -> dict[str, object]:
+    """Victim's own phone, network and location (with the same GPS jitter as normal payments)."""
     return {
         "user_id": v["user_id"],
         "device_id": v["main_device"],
         "ip": v["home_ip"],
-        "geo_lat": np.full(k, v["home_lat"]),
-        "geo_lon": np.full(k, v["home_lon"]),
+        "geo_lat": v["home_lat"] + rng.normal(0, GPS_NOISE_DEG, size=k),
+        "geo_lon": v["home_lon"] + rng.normal(0, GPS_NOISE_DEG, size=k),
     }
 
 
@@ -116,7 +124,7 @@ def digital_arrest(world: World, rng: np.random.Generator, size: int) -> pd.Data
     )
     frame = txn_frame(
         rng,
-        **home(v, size),
+        **home(rng, v, size),
         payee_vpa=payee,
         amount=np.round(v["avg_txn_amount"] * rng.uniform(10, 50, size=size), 2),
         t=t,
@@ -159,7 +167,7 @@ def fake_support_refund(world: World, rng: np.random.Generator, size: int) -> pd
     on_call = rng.random(size) < 0.8
     frame = txn_frame(
         rng,
-        **home(v, size),
+        **home(rng, v, size),
         payee_vpa=payee,
         amount=np.round(v["avg_txn_amount"] * rng.uniform(1, 8, size=size), 2),
         t=t,
@@ -182,7 +190,7 @@ def investment_task(world: World, rng: np.random.Generator, size: int) -> pd.Dat
     payee = new_scam_payee(world, rng, ("invest.task", "crypto.profit", "earn.daily"), t0, (5, 90))
     frame = txn_frame(
         rng,
-        **home(v, size),
+        **home(rng, v, size),
         payee_vpa=payee,
         amount=np.round(v["avg_txn_amount"] * rng.uniform(0.5, 2) * growth, 2),
         t=t,

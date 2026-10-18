@@ -3,7 +3,7 @@
 import numpy as np
 import pandas as pd
 
-from ml.simulator.population import DAY, HOUR, World, random_ips, txn_frame
+from ml.simulator.population import DAY, GPS_NOISE_DEG, HOUR, World, random_ips, txn_frame
 
 
 def amount_mults(world: World) -> dict[str, float]:
@@ -80,8 +80,8 @@ def generate_normal(world: World, n: int, rng: np.random.Generator) -> pd.DataFr
         device_id=world.devices["device_id"].to_numpy()[dev_row],
         ip=ip,
         is_vpn=rng.random(n) < 0.01,
-        geo_lat=lat + rng.normal(0, 0.02, size=n),
-        geo_lon=lon + rng.normal(0, 0.02, size=n),
+        geo_lat=lat + rng.normal(0, GPS_NOISE_DEG, size=n),
+        geo_lon=lon + rng.normal(0, GPS_NOISE_DEG, size=n),
         t=t,
         status=np.where(rng.random(n) < norm.failed_share, "FAILED", "SUCCESS"),
         on_call=on_call,

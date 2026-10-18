@@ -336,3 +336,12 @@ def test_same_seed_same_data_other_seed_differs() -> None:
 def test_too_small_n_is_rejected() -> None:
     with pytest.raises(ValueError, match="too small"):
         simulate(load_config(n_transactions=1000, n_users=N_USERS))
+
+
+def test_no_payment_sits_exactly_at_home(out: dict[str, pd.DataFrame]) -> None:
+    """Every payment gets GPS jitter. Exact home coordinates on fraud rows only would let a model
+    spot fraud by `ip_distance_km == 0` (a leak found while training the T2.1 baseline)."""
+    homes = out["users"][["user_id", "home_lat", "home_lon"]]
+    txns = out["transactions"].merge(homes, on="user_id")
+    exact = (txns["geo_lat"] == txns["home_lat"]) & (txns["geo_lon"] == txns["home_lon"])
+    assert exact.groupby(txns["is_fraud"]).mean().max() < 0.01

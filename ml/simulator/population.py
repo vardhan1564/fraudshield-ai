@@ -13,6 +13,7 @@ from ml.simulator.config import SimConfig
 
 DAY = 86_400
 HOUR = 3_600
+GPS_NOISE_DEG = 0.02  # ~2 km phone GPS jitter; every payment gets it, fraud or not
 
 FIRST_NAMES = [
     "Aarav",
