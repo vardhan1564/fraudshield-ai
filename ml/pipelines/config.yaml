@@ -16,6 +16,7 @@ datasets:
   ieee:
     raw_dir: ml/data/raw/ieee
     max_rows: null # e.g. 300000 to train on the earliest rows if memory is short
+    engineered: true # card-uid history features (ml/features/ieee.py)
 
 xgboost:
   num_boost_round: 2000

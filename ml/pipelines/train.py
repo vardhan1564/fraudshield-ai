@@ -272,7 +272,7 @@ def load_dataset(name: str, cfg: dict[str, Any]) -> Dataset:
     if name == "simulated":
         return load_simulated(ROOT / d["features"], ROOT / d["raw_dir"], d["warmup_days"])
     if name == "ieee":
-        return load_ieee(ROOT / d["raw_dir"], d.get("max_rows"))
+        return load_ieee(ROOT / d["raw_dir"], d.get("max_rows"), d.get("engineered", False))
     raise ValueError(f"unknown dataset {name!r}")
 
 

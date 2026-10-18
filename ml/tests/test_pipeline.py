@@ -116,6 +116,7 @@ def test_load_ieee_aligns_identity_and_drops_ids(tmp_path: Path) -> None:
     assert ds.X["id_01"].isna().tolist()[2:] == [True, True]
     assert ds.X["DeviceType"].dtype == "category" and ds.X["ProductCD"].dtype == "category"
     assert ds.X["TransactionAmt"].dtype == "float32"
+    assert (tmp_path / "train_transaction.parquet").exists()  # cached for the next run
     assert len(load_ieee(tmp_path, max_rows=2).y) == 2
 
 

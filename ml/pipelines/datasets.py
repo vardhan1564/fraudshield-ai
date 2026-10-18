@@ -10,8 +10,11 @@ from pathlib import Path
 
 import numpy as np
 import pandas as pd
+import pyarrow as pa
+import pyarrow.parquet as pq
 
 from ml.features.build import training_frame
+from ml.features.ieee import add_ieee_features
 from ml.features.schema import FEATURE_NAMES
 
 
@@ -75,16 +78,43 @@ IEEE_STRING_COLS |= {"DeviceType", "DeviceInfo"}
 IEEE_ID_COLS = {"TransactionID": "int64", "TransactionDT": "int64", "isFraud": "int8"}
 
 
-def _read_ieee_csv(path: Path) -> pd.DataFrame:
-    """Numbers as float32 and text as category: about half the memory of pandas' defaults."""
-    columns = pd.read_csv(path, nrows=0).columns
+CSV_CHUNK_ROWS = 50_000
+
+
+def _arrow_type(col: str) -> pa.DataType:
+    ids = {"TransactionID": pa.int64(), "TransactionDT": pa.int64(), "isFraud": pa.int8()}
+    return ids.get(col, pa.string() if col in IEEE_STRING_COLS else pa.float32())
+
+
+def _csv_to_parquet(csv: Path, out: Path) -> None:
+    """Convert in chunks: parsing the whole CSV at once needs ~2 GB more than this laptop has."""
+    columns = pd.read_csv(csv, nrows=0).columns
+    schema = pa.schema([(c, _arrow_type(c)) for c in columns])
     dtypes = {
-        c: IEEE_ID_COLS.get(c, "category" if c in IEEE_STRING_COLS else "float32") for c in columns
+        c: str if c in IEEE_STRING_COLS else schema.field(c).type.to_pandas_dtype() for c in columns
     }
-    return pd.read_csv(path, dtype=dtypes)
+    tmp = out.with_suffix(".parquet.tmp")
+    with pq.ParquetWriter(tmp, schema) as writer:
+        for chunk in pd.read_csv(csv, dtype=dtypes, chunksize=CSV_CHUNK_ROWS):
+            writer.write_table(pa.Table.from_pandas(chunk, schema=schema, preserve_index=False))
+    tmp.replace(out)  # only a finished file counts as the cache
 
 
-def load_ieee(raw_dir: Path, max_rows: int | None = None) -> Dataset:
+def _read_ieee_csv(path: Path) -> pd.DataFrame:
+    """Numbers as float32 and text as category: about half the memory of pandas' defaults.
+
+    The first call caches the CSV as Parquet next to it; later calls read only that.
+    """
+    cache = path.with_suffix(".parquet")
+    if not cache.exists() or cache.stat().st_mtime < path.stat().st_mtime:
+        _csv_to_parquet(path, cache)
+    text = [c for c in pq.read_schema(cache).names if c in IEEE_STRING_COLS]
+    table = pq.read_table(cache, read_dictionary=text)  # text arrives as category
+    return table.to_pandas(self_destruct=True, split_blocks=True)
+
+
+def load_ieee(raw_dir: Path, max_rows: int | None = None, engineered: bool = False) -> Dataset:
+    """`engineered` adds the card-uid history features from ml/features/ieee.py."""
     txn = _read_ieee_csv(raw_dir / "train_transaction.csv")
     txn = txn.sort_values("TransactionDT", kind="stable", ignore_index=True)
     if max_rows:
@@ -98,6 +128,8 @@ def load_ieee(raw_dir: Path, max_rows: int | None = None) -> Dataset:
         for col in idn.columns:
             txn[col] = idn[col].to_numpy() if idn[col].dtype != "category" else idn[col].array
     del idn
+    if engineered:
+        add_ieee_features(txn)
 
     features = [c for c in txn.columns if c not in IEEE_ID_COLS]  # not the id, label or clock
     return Dataset(
