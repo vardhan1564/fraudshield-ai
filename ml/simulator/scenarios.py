@@ -46,8 +46,11 @@ def new_scam_payee(
     t0: int,
     age_days: tuple[int, int],
 ) -> str:
-    """A fraudster-controlled VPA that did not exist before the scam (no customer account)."""
+    """A fraudster-controlled VPA (no customer account). Usually freshly opened, but some
+    scams use old "rented" accounts, so account age alone can't give them away."""
     vpa = f"{rng.choice(prefixes)}{len(world.payees) + 1}@{rng.choice(['ybl', 'okaxis', 'paytm'])}"
+    if rng.random() < world.cfg.realism.aged_scam_payee_share:
+        age_days = (180, 2000)
     created = t0 - int(rng.integers(age_days[0], age_days[1] + 1)) * DAY
     world.add_payees(
         pd.DataFrame({"vpa": [vpa], "user_id": [None], "category": ["P2P"], "created_t": [created]})
@@ -131,7 +134,7 @@ def digital_arrest(world: World, rng: np.random.Generator, size: int) -> pd.Data
         on_call=True,
         caller_in_contacts=False,
         call_duration_s=t - call_start,
-        screen_share_active=True,
+        screen_share_active=bool(rng.random() < world.cfg.realism.digital_arrest_screen_share),
         remote_access_app="AnyDesk" if rng.random() < 0.25 else None,
         session_len_s=rng.uniform(300, 1500, size=size),
         login_to_pay_s=rng.uniform(60, 400, size=size),

@@ -4,6 +4,7 @@ import numpy as np
 import pandas as pd
 
 from ml.simulator.population import DAY, GPS_NOISE_DEG, HOUR, World, random_ips, txn_frame
+from ml.simulator.schema import REMOTE_ACCESS_APPS
 
 
 def amount_mults(world: World) -> dict[str, float]:
@@ -56,6 +57,11 @@ def generate_normal(world: World, n: int, rng: np.random.Generator) -> pd.DataFr
     # Which phone: the main device 85% of the time.
     first, n_dev = world.device_ptr[u], np.diff(world.device_ptr)[u]
     dev_row = np.where(rng.random(n) < 0.85, first, first + (rng.random(n) * n_dev).astype(int))
+    if world.new_phone_row is not None:  # after switching phones, mostly the new one
+        switched = (
+            (world.new_phone_t[u] >= 0) & (t >= world.new_phone_t[u]) & (rng.random(n) < 0.85)
+        )
+        dev_row = np.where(switched, world.new_phone_row[u], dev_row)
 
     # Where: home network and city, sometimes mobile data or travel.
     ip = users["home_ip"].to_numpy()[u].copy()
@@ -68,8 +74,13 @@ def generate_normal(world: World, n: int, rng: np.random.Generator) -> pd.DataFr
     lat[travel] = [cfg.cities[i].lat for i in city]
     lon[travel] = [cfg.cities[i].lon for i in city]
 
-    # Some people happen to be on a call (mostly with contacts) while paying.
-    on_call = rng.random(n) < 0.04
+    # Some people are on a call while paying, sometimes with an unknown number (delivery,
+    # bank, ...), and a few share their screen or have a remote-access app open for work.
+    real = cfg.realism
+    on_call = rng.random(n) < real.legit_on_call
+    remote = np.where(
+        rng.random(n) < real.legit_remote_app, rng.choice(REMOTE_ACCESS_APPS, size=n), None
+    )
     frame = txn_frame(
         rng,
         user_id=users["user_id"].to_numpy()[u],
@@ -85,9 +96,10 @@ def generate_normal(world: World, n: int, rng: np.random.Generator) -> pd.DataFr
         t=t,
         status=np.where(rng.random(n) < norm.failed_share, "FAILED", "SUCCESS"),
         on_call=on_call,
-        caller_in_contacts=on_call & (rng.random(n) < 0.9),
+        caller_in_contacts=on_call & (rng.random(n) >= real.legit_unknown_caller),
         call_duration_s=np.where(on_call, rng.exponential(240, size=n).astype(int), 0),
-        screen_share_active=rng.random(n) < 0.002,
+        screen_share_active=rng.random(n) < real.legit_screen_share,
+        remote_access_app=remote,
     )
     add_hard_negatives(world, frame, u, rng)
     return frame

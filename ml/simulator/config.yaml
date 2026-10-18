@@ -38,6 +38,18 @@ hard_negatives:
   night_legit: 0.005 # 00:00-04:59
   call_legit: 0.005 # on a long call with someone in contacts
 
+# Realism: legit look-alikes and scam variety, so no single signal gives fraud away.
+realism:
+  new_merchant_share: 0.15 # shops opened in the last 90 days
+  new_customer_share: 0.15 # customers who joined in the last 90 days (young P2P payees)
+  aged_scam_payee_share: 0.4 # scam payees on old "rented" accounts (180-2000 days)
+  legit_on_call: 0.08 # normal payments made during a phone call
+  legit_unknown_caller: 0.25 # of those, the caller is not in contacts (delivery, bank, ...)
+  legit_screen_share: 0.01 # sharing the screen with family or office IT
+  legit_remote_app: 0.003 # AnyDesk etc. open for work
+  digital_arrest_screen_share: 0.85 # not every victim is asked to share the screen
+  legit_new_phone_users: 0.03 # customers who switch to a new phone during the window
+
 # Merchant categories: how often a merchant has the category, and amount vs the user's average.
 merchant_categories:
   GROCERY: { weight: 0.22, amount_mult: 0.6 }

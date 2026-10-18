@@ -157,8 +157,9 @@ def _rows(frame: pd.DataFrame, name: str) -> pd.DataFrame:
 def test_digital_arrest_signature(scen: tuple[World, pd.DataFrame]) -> None:
     world, frame = scen
     da = _rows(frame, "digital_arrest").merge(world.users[["user_id", "avg_txn_amount"]])
-    assert (da["on_call"] & ~da["caller_in_contacts"] & da["screen_share_active"]).all()
+    assert (da["on_call"] & ~da["caller_in_contacts"]).all()
     assert (da["call_duration_s"] >= 1200).all()
+    assert 0.6 <= da["screen_share_active"].mean() < 1.0  # most, not all, share the screen
     assert (da["amount"] >= 10 * da["avg_txn_amount"] - 0.01).all()
     assert (da["amount"] <= 50 * da["avg_txn_amount"] + 0.01).all()
     # New payee: a scam VPA nobody else ever pays.
@@ -345,3 +346,30 @@ def test_no_payment_sits_exactly_at_home(out: dict[str, pd.DataFrame]) -> None:
     txns = out["transactions"].merge(homes, on="user_id")
     exact = (txns["geo_lat"] == txns["home_lat"]) & (txns["geo_lon"] == txns["home_lon"])
     assert exact.groupby(txns["is_fraud"]).mean().max() < 0.01
+
+
+# --- realism: legit look-alikes so no single signal gives fraud away ---------------------------
+
+
+def test_realism_no_single_signal_gives_fraud_away(out: dict[str, pd.DataFrame]) -> None:
+    txns = out["transactions"]
+    legit = txns[~txns["is_fraud"]]
+    scams = txns[
+        txns["scenario"].isin(["digital_arrest", "fake_support_refund", "investment_task"])
+    ]
+    # Young payee accounts: common among legit payments too, and not every scam payee is young.
+    assert (legit["payee_account_age_days"] < 90).mean() > 0.03
+    assert (scams.drop_duplicates("payee_vpa")["payee_account_age_days"] >= 180).mean() > 0.15
+    # Unknown callers and screen sharing also happen during legit payments.
+    unknown_call = legit["on_call"] & ~legit["caller_in_contacts"]
+    assert 0.01 < unknown_call.mean() < 0.04
+    assert legit["screen_share_active"].mean() > 0.005 and legit["remote_access_app"].notna().any()
+    assert scams["on_call"].mean() > 5 * legit["on_call"].mean()  # still a strong signal for scams
+
+
+def test_some_customers_switch_to_a_new_phone(out: dict[str, pd.DataFrame]) -> None:
+    devices, txns = out["devices"], out["transactions"]
+    start = pd.Timestamp(load_config().start)
+    bought_later = devices[devices["first_seen"] > start]
+    legit_new = txns[~txns["is_fraud"] & txns["device_id"].isin(bought_later["device_id"])]
+    assert len(legit_new) > 0  # legit payments from phones first seen inside the window

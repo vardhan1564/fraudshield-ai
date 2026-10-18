@@ -55,6 +55,18 @@ class NormalConfig(_Frozen):
         return self
 
 
+class RealismConfig(_Frozen):
+    new_merchant_share: float = Field(ge=0, le=1)
+    new_customer_share: float = Field(ge=0, le=1)
+    aged_scam_payee_share: float = Field(ge=0, le=1)
+    legit_on_call: float = Field(ge=0, le=1)
+    legit_unknown_caller: float = Field(ge=0, le=1)
+    legit_screen_share: float = Field(ge=0, le=1)
+    legit_remote_app: float = Field(ge=0, le=1)
+    digital_arrest_screen_share: float = Field(ge=0, le=1)
+    legit_new_phone_users: float = Field(ge=0, le=1)
+
+
 class Category(_Frozen):
     weight: float = Field(gt=0)
     amount_mult: float = Field(gt=0)
@@ -78,6 +90,7 @@ class SimConfig(_Frozen):
     rings: RingConfig
     normal: NormalConfig
     hard_negatives: dict[str, float]
+    realism: RealismConfig
     merchant_categories: dict[str, Category]
     p2p_amount_mult: float = Field(gt=0)
     cities: list[City] = Field(min_length=1)

@@ -98,6 +98,8 @@ class World:
     device_ptr: np.ndarray  # user i's own devices: devices rows ptr[i]:ptr[i+1], main one first
     n_customers: int  # users[:n_customers] are ordinary customers; mules come after
     n_merchants: int  # payees[:n_merchants] are merchants, then one payee per customer
+    new_phone_row: np.ndarray | None = None  # per customer: devices row of a phone bought later
+    new_phone_t: np.ndarray | None = None  # ... and when it was first used (-1 = none)
     reports: list[pd.DataFrame] = field(default_factory=list)
     used_victims: set[int] = field(default_factory=set)  # scenario victims, one incident each
 
@@ -224,7 +226,11 @@ def _ragged(
 
 def build_population(cfg: SimConfig, rng: np.random.Generator) -> World:
     n = cfg.n_users
-    users = make_people(rng, cfg, n, 1, -rng.integers(30 * DAY, 3650 * DAY, size=n))
+    real = cfg.realism
+    created = -rng.integers(30 * DAY, 3650 * DAY, size=n)
+    joined_recently = rng.random(n) < real.new_customer_share  # young accounts that are legit
+    created[joined_recently] = -rng.integers(DAY, 90 * DAY, size=joined_recently.sum())
+    users = make_people(rng, cfg, n, 1, created)
     # A few legit SIM changes, so "SIM changed" alone is not fraud.
     legit_sim = rng.random(n) < 0.05
     users.loc[legit_sim, "sim_changed_t"] = rng.integers(0, cfg.days * DAY, size=legit_sim.sum())
@@ -240,8 +246,10 @@ def build_population(cfg: SimConfig, rng: np.random.Generator) -> World:
             "fingerprint": fingerprints(rng, k),
             "os": rng.choice(["Android", "iOS"], size=k, p=[0.85, 0.15]),
             "is_rooted": rng.random(k) < 0.02,
-            "first_seen_t": users["created_t"].to_numpy()[owner]
-            + rng.integers(0, 20 * DAY, size=k),
+            # Set up within 20 days of joining, and always before the window starts.
+            "first_seen_t": np.minimum(
+                users["created_t"].to_numpy()[owner] + rng.integers(0, 20 * DAY, size=k), -HOUR
+            ),
         }
     )
     device_ptr = np.concatenate([[0], np.cumsum(per_user)])
@@ -261,7 +269,11 @@ def build_population(cfg: SimConfig, rng: np.random.Generator) -> World:
             ],
             "user_id": None,
             "category": merchant_cat,
-            "created_t": -rng.integers(180 * DAY, 3650 * DAY, size=n_merchants),
+            "created_t": np.where(
+                rng.random(n_merchants) < cfg.realism.new_merchant_share,
+                -rng.integers(DAY, 90 * DAY, size=n_merchants),  # new shops are legit too
+                -rng.integers(180 * DAY, 3650 * DAY, size=n_merchants),
+            ),
         }
     )
     people = pd.DataFrame(
@@ -284,6 +296,28 @@ def build_population(cfg: SimConfig, rng: np.random.Generator) -> World:
     person = np.where(person == owner_of, (person + 1) % n, person)  # nobody pays themselves
     raw[is_person] = n_merchants + person
 
+    # Some customers switch to a new phone during the window (legit "new device").
+    switch = np.flatnonzero(rng.random(n) < real.legit_new_phone_users)
+    new_phone_row, new_phone_t = np.full(n, -1), np.full(n, -1)
+    new_phone_row[switch] = np.arange(k, k + len(switch))
+    new_phone_t[switch] = rng.integers(5 * DAY, (cfg.days - 5) * DAY, size=len(switch))
+    devices = pd.concat(
+        [
+            devices,
+            pd.DataFrame(
+                {
+                    "device_id": [f"D{i + 1:06d}" for i in range(k, k + len(switch))],
+                    "user_id": users["user_id"].to_numpy()[switch],
+                    "fingerprint": fingerprints(rng, len(switch)),
+                    "os": rng.choice(["Android", "iOS"], size=len(switch), p=[0.85, 0.15]),
+                    "is_rooted": False,
+                    "first_seen_t": new_phone_t[switch],
+                }
+            ),
+        ],
+        ignore_index=True,
+    )
+
     return World(
         cfg=cfg,
         users=users,
@@ -294,4 +328,6 @@ def build_population(cfg: SimConfig, rng: np.random.Generator) -> World:
         device_ptr=device_ptr,
         n_customers=n,
         n_merchants=n_merchants,
+        new_phone_row=new_phone_row,
+        new_phone_t=new_phone_t,
     )

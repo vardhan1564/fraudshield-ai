@@ -82,6 +82,7 @@ Implementation notes (T1.2, `ml/simulator/`; column lists in `schema.py`):
 - There is no payees file: `transactions` carries `payee_user_id` and `payee_account_age_days` at payment time, and `reports.parquet` has timestamps, so report counts can be computed without looking into the future. About 2% of reports are false reports against legit payees.
 - Extra ground-truth columns on `transactions`: `is_fraud`, `hard_negative` (`big_legit`, `new_payee_legit`, `night_legit`, `call_legit`), `ring_id`, plus `status` (SUCCESS/FAILED) for `failed_count_1h`. Context and behaviour columns use the spec 04 request names. Ground-truth columns must never be model features.
 - `edges.parquet` has the same columns as the `graph_edges` table (spec 05).
+- Realism (`config.yaml` `realism:`): legit look-alikes so no single signal gives fraud away: ~15% of shops and customers are < 90 days old, 40% of scam payees use old "rented" accounts, legit payments include unknown callers (~2%), screen sharing (~1%) and remote-access apps, 3% of customers switch phones mid-window, and digital arrest includes screen share 85% of the time.
 
 ## 5. Training protocol
 - Split by **time** (train first 70%, val next 15%, test last 15%) — never random split.
