@@ -144,6 +144,12 @@ logs a SHAP summary plot to MLflow and rewrites `ml/models/txn_model/MODEL_CARD.
 python -m ml.pipelines.tune --dataset simulated --trials 30   # ~2 min
 ```
 
+Anomaly model (legit data only; keeps the better of Isolation Forest / autoencoder on account
+takeover) to `ml/artifacts/anomaly_model.pt`, git-ignored, so re-run it after a fresh clone:
+```powershell
+python -m ml.models.anomaly_model   # ~15 s
+```
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

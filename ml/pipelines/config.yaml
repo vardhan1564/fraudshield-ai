@@ -29,3 +29,14 @@ xgboost:
     tree_method: hist
     max_bin: 256
     eval_metric: aucpr
+
+# Anomaly model (T2.3): trained on legit rows only, behaviour + device + velocity features.
+anomaly:
+  isolation_forest: { n_estimators: 200, max_samples: 256 }
+  autoencoder:
+    hidden: [8, 4] # encoder sizes; the decoder mirrors them
+    epochs: 50
+    patience: 5 # early stopping on validation-legit loss
+    batch_size: 512
+    lr: 0.001
+  mlflow_experiment: anomaly_model

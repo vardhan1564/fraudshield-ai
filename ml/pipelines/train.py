@@ -197,6 +197,23 @@ def format_table(result: TrainResult) -> str:
     return "\n".join(lines)
 
 
+def mlflow_client(experiment: str) -> Any:
+    """The mlflow module, pointed at MLFLOW_TRACKING_URI from .env and the given experiment.
+
+    Imported lazily: MLflow is heavy and not installed in CI.
+    """
+    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
+    import mlflow
+    from dotenv import load_dotenv
+
+    load_dotenv(ROOT / ".env")
+    uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
+    # On Windows "localhost" tries IPv6 first and adds ~2 s to every one of MLflow's calls.
+    mlflow.set_tracking_uri(uri.replace("//localhost", "//127.0.0.1"))
+    mlflow.set_experiment(experiment)
+    return mlflow
+
+
 def log_to_mlflow(
     result: TrainResult,
     cfg: dict[str, Any],
@@ -211,16 +228,9 @@ def log_to_mlflow(
 
     Returns (run id, registered model version or None).
     """
-    os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
-    import mlflow  # heavy and not installed in CI, so only imported when logging
-    import mlflow.xgboost
-    from dotenv import load_dotenv
+    mlflow = mlflow_client(cfg["mlflow"]["experiment"])
+    import mlflow.xgboost as mlflow_xgboost
 
-    load_dotenv(ROOT / ".env")
-    uri = os.environ.get("MLFLOW_TRACKING_URI", "http://127.0.0.1:5000")
-    # On Windows "localhost" tries IPv6 first and adds ~2 s to every one of MLflow's calls.
-    mlflow.set_tracking_uri(uri.replace("//localhost", "//127.0.0.1"))
-    mlflow.set_experiment(cfg["mlflow"]["experiment"])
     with mlflow.start_run(run_name=f"{stage}-{result.name}") as run:
         mlflow.set_tags(
             {
@@ -248,7 +258,7 @@ def log_to_mlflow(
         mlflow.log_text(table, "metrics.txt")
         for path in artifacts or []:
             mlflow.log_artifact(str(path))
-        info = mlflow.xgboost.log_model(
+        info = mlflow_xgboost.log_model(
             result.booster,
             name="model",
             registered_model_name="txn_model" if register else None,
