@@ -1,0 +1,33 @@
+{
+  "model": "meta_model",
+  "created": "2026-10-18",
+  "rule": "risk_score > hold -> HOLD; risk_score > step_up -> STEP_UP; else APPROVE",
+  "risk_rules": {
+    "unknown_call_new_payee": {
+      "when": "ctx_unknown_call and payee_is_new",
+      "add": 0.25,
+      "cap": 1.0
+    }
+  },
+  "step_up": 0.01605032756694744,
+  "hold": 0.25,
+  "targets": {
+    "step_up_max_fpr": 0.05,
+    "hold_max_fpr": 0.01
+  },
+  "validation_out_of_fold": {
+    "fpr_hold": 0.005391920167390954,
+    "fpr_step_up_or_hold": 0.04748108804120393,
+    "recall_hold": 0.8621908127208481
+  },
+  "inputs": [
+    "txn_score",
+    "anomaly_score",
+    "social_eng_score",
+    "graph_score"
+  ],
+  "base_models": {
+    "txn_model_version": "2",
+    "txn_data_hash": "6d2f3758d379b4e2"
+  }
+}

@@ -48,6 +48,8 @@ social:
   coach_share: 0.5 # share of STEP_UP-range training rows that get simulated coach answers
   coach_questions: [2, 3] # spec 01 F1: 2-3 yes/no questions
   coach_yes: { scam: 0.6, other_fraud: 0.05, legit: 0.03 } # chance of a red-flag YES per question
+  # Turning one of these on may never lower the score (spec 01 F2: a call must raise risk).
+  monotone_increasing: [ctx_unknown_call, ctx_screen_share, ctx_call_long, coach_red_flags]
   lightgbm:
     num_boost_round: 2000
     early_stopping_rounds: 100
@@ -59,3 +61,11 @@ social:
       bagging_fraction: 0.8
       bagging_freq: 1
   mlflow_experiment: social_model
+
+# Meta-model (T2.5): isotonic-calibrated logistic regression on the model scores.
+meta:
+  hold_fpr: 0.01 # HOLD threshold: FPR <= 1% on validation (spec 03 section 5)
+  step_up_fpr: 0.05 # STEP_UP threshold: FPR <= 5% on validation
+  unknown_call_boost: 0.25 # spec 01 F2 rule: unknown call + new payee adds this to risk_score
+  f2_max_base_risk: 0.8 # F2 check counts payments whose risk without the call is <= this
+  mlflow_experiment: meta_model

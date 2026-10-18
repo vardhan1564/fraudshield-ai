@@ -99,6 +99,16 @@ def test_red_flags_raise_the_score(result: SocialResult) -> None:
     assert scores[1] >= scores[0]
 
 
+def test_scam_context_never_lowers_the_score(result: SocialResult) -> None:
+    rows = pd.DataFrame(
+        np.random.default_rng(2).random((500, len(SOCIAL_FEATURES))), columns=SOCIAL_FEATURES
+    ).assign(payee_account_age_days=lambda d: d.payee_account_age_days * 1000)
+    for feature in CFG["social"]["monotone_increasing"]:
+        off = result.booster.predict(rows.assign(**{feature: 0.0}))
+        on = result.booster.predict(rows.assign(**{feature: 1.0}))
+        assert (on >= off - 1e-12).all(), feature
+
+
 def test_save_and_load_give_identical_scores(result: SocialResult, tmp_path: Path) -> None:
     path = tmp_path / "social_model.txt"
     meta = save(result, path)

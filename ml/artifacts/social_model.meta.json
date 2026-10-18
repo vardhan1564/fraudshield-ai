@@ -12,73 +12,73 @@
     "coach_red_flags",
     "amount_ratio_avg"
   ],
-  "threshold": 0.1628174724322395,
-  "step_up_threshold": 0.02040303528585428,
-  "best_iteration": 59,
+  "threshold": 0.23363387326272514,
+  "step_up_threshold": 0.05319728104539671,
+  "best_iteration": 85,
   "metrics": {
     "before": {
       "val": {
-        "pr_auc": 0.7687322676247436,
-        "roc_auc": 0.9510756747374816,
-        "recall_at_1pct_fpr": 0.7608695652173914,
-        "f1": 0.623608017817372,
-        "recall": 0.7608695652173914,
+        "pr_auc": 0.7794929968053641,
+        "roc_auc": 0.9664327866007116,
+        "recall_at_1pct_fpr": 0.7771739130434783,
+        "f1": 0.6327433628318584,
+        "recall": 0.7771739130434783,
         "fpr": 0.00998003992015968,
         "fraud_rate": 0.01447792902667401
       },
       "test": {
-        "pr_auc": 0.9340155974438912,
-        "roc_auc": 0.9908759283529925,
-        "recall_at_1pct_fpr": 0.9357798165137615,
+        "pr_auc": 0.9510548450195913,
+        "roc_auc": 0.9953549584971604,
+        "recall_at_1pct_fpr": 0.9724770642201835,
         "f1": 0.6666666666666666,
-        "recall": 0.9357798165137615,
-        "fpr": 0.00753968253968254,
+        "recall": 0.9724770642201835,
+        "fpr": 0.008174603174603175,
         "fraud_rate": 0.00857659926036667
       }
     },
     "after": {
       "val": {
-        "pr_auc": 0.8320243099136814,
-        "roc_auc": 0.9595619630304608,
-        "recall_at_1pct_fpr": 0.8369565217391305,
-        "f1": 0.6652267818574514,
-        "recall": 0.8369565217391305,
+        "pr_auc": 0.830888357886085,
+        "roc_auc": 0.9688021782521914,
+        "recall_at_1pct_fpr": 0.8315217391304348,
+        "f1": 0.6623376623376623,
+        "recall": 0.8315217391304348,
         "fpr": 0.00998003992015968,
         "fraud_rate": 0.01447792902667401
       },
       "test": {
-        "pr_auc": 0.9292557876926674,
-        "roc_auc": 0.9923525557011796,
-        "recall_at_1pct_fpr": 0.963302752293578,
-        "f1": 0.660377358490566,
-        "recall": 0.963302752293578,
-        "fpr": 0.008253968253968255,
+        "pr_auc": 0.975905530128077,
+        "roc_auc": 0.9973725790010194,
+        "recall_at_1pct_fpr": 0.981651376146789,
+        "f1": 0.6424242424242425,
+        "recall": 0.9724770642201835,
+        "fpr": 0.009126984126984128,
         "fraud_rate": 0.00857659926036667
       }
     }
   },
   "scenario_recall": {
     "before": {
-      "digital_arrest": 0.9310344827586207,
+      "digital_arrest": 1.0,
       "fake_support_refund": 1.0,
       "investment_task": 0.8235294117647058,
-      "account_takeover": 0.2,
+      "account_takeover": 0.25,
       "card_testing": 0.0,
       "mule_ring": 0.007751937984496124
     },
     "after": {
       "digital_arrest": 0.9827586206896551,
       "fake_support_refund": 1.0,
-      "investment_task": 0.8235294117647058,
-      "account_takeover": 0.2,
+      "investment_task": 0.8823529411764706,
+      "account_takeover": 0.25,
       "card_testing": 0.0,
-      "mule_ring": 0.015503875968992248
+      "mule_ring": 0.023255813953488372
     }
   },
   "coach": {
-    "train_step_up_rows": 4747,
-    "train_coached_rows": 2405,
-    "train_rows_with_red_flag": 410
+    "train_step_up_rows": 5129,
+    "train_coached_rows": 2596,
+    "train_rows_with_red_flag": 418
   },
   "data_hash": "6ff17ea28596fdfc"
 }

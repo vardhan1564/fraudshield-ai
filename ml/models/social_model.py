@@ -125,6 +125,9 @@ def train_social(ds: Dataset, cfg: dict[str, Any]) -> SocialResult:
         "objective": "binary",
         "metric": "average_precision",
         "scale_pos_weight": (len(y["train"]) - positives) / positives,
+        "monotone_constraints": [
+            int(f in scfg.get("monotone_increasing", [])) for f in SOCIAL_FEATURES
+        ],
         "seed": seed,
         "deterministic": True,
         "force_row_wise": True,

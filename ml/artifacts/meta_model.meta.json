@@ -1,0 +1,132 @@
+{
+  "coefficients": {
+    "txn_score": 2.6443,
+    "anomaly_score": 0.0063,
+    "social_eng_score": 0.5778,
+    "graph_score": 0.0
+  },
+  "metrics": {
+    "val_oof": {
+      "pr_auc": 0.9001717760834544,
+      "roc_auc": 0.9894190569301005,
+      "recall_at_1pct_fpr": 0.8621908127208481,
+      "f1": 0.8215488215488216,
+      "recall": 0.8621908127208481,
+      "fpr": 0.005391920167390954,
+      "fraud_rate": 0.022267684318199702,
+      "brier": 0.004821952698335229,
+      "fpr_step_up_or_hold": 0.04748108804120393,
+      "decisions": {
+        "legit": {
+          "APPROVE": 0.9525189119587961,
+          "STEP_UP": 0.04208916787381297,
+          "HOLD": 0.005391920167390954
+        },
+        "fraud": {
+          "APPROVE": 0.05653710247349823,
+          "STEP_UP": 0.0812720848056537,
+          "HOLD": 0.8621908127208481
+        }
+      },
+      "by_scenario": {
+        "account_takeover": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "card_testing": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "digital_arrest": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "fake_support_refund": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "investment_task": {
+          "hold": 0.48,
+          "step_up_or_hold": 0.7866666666666666
+        },
+        "mule_ring": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        }
+      }
+    },
+    "test": {
+      "pr_auc": 0.9927160329398695,
+      "roc_auc": 0.9997304230172077,
+      "recall_at_1pct_fpr": 0.9854014598540146,
+      "f1": 0.8653846153846154,
+      "recall": 0.9854014598540146,
+      "fpr": 0.006433453960595094,
+      "fraud_rate": 0.02155952474624282,
+      "brier": 0.001760383631891771,
+      "fpr_step_up_or_hold": 0.035544833132287894,
+      "decisions": {
+        "legit": {
+          "APPROVE": 0.9644551668677122,
+          "STEP_UP": 0.029111379171692802,
+          "HOLD": 0.006433453960595094
+        },
+        "fraud": {
+          "APPROVE": 0.0,
+          "STEP_UP": 0.014598540145985401,
+          "HOLD": 0.9854014598540146
+        }
+      },
+      "by_scenario": {
+        "account_takeover": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "card_testing": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "digital_arrest": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "fake_support_refund": {
+          "hold": 1.0,
+          "step_up_or_hold": 1.0
+        },
+        "investment_task": {
+          "hold": 0.8823529411764706,
+          "step_up_or_hold": 1.0
+        },
+        "mule_ring": {
+          "hold": 0.9844961240310077,
+          "step_up_or_hold": 1.0
+        }
+      },
+      "fpr_gap_points": {
+        "city_tier": 0.23257287255108217,
+        "age_band": 0.28047174182090795
+      }
+    },
+    "test_txn_only": {
+      "pr_auc": 0.9968351552841307,
+      "roc_auc": 0.9999187013345309,
+      "recall_at_1pct_fpr": 1.0,
+      "f1": 0.8379204892966361,
+      "recall": 1.0,
+      "fpr": 0.0085243264977885,
+      "fraud_rate": 0.02155952474624282
+    },
+    "f2_unknown_call": {
+      "rows": 7173.0,
+      "mean_risk_with_call": 0.25585155334470666,
+      "mean_risk_without_call": 0.003480451247620794,
+      "mean_difference": 0.25237110209708585,
+      "min_difference": 0.23835697978784032
+    },
+    "rule_hit_rate_test": {
+      "legit": 0.012062726176115802,
+      "fraud": 0.16423357664233576
+    }
+  }
+}
