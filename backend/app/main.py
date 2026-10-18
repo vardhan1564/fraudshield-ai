@@ -14,6 +14,7 @@ from app.core.db import make_engine, make_sessionmaker
 from app.core.errors import register_error_handlers
 from app.core.logging import setup_logging
 from app.core.metrics import RequestContextMiddleware
+from app.core.redis import make_redis
 from app.schemas.errors import ErrorResponse
 
 logger = logging.getLogger(__name__)
@@ -28,6 +29,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
         logger.info("startup", extra={"app_env": settings.app_env})
         yield
         await app.state.engine.dispose()
+        await app.state.redis.aclose()
         logger.info("shutdown")
 
     app = FastAPI(
@@ -39,6 +41,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.settings = settings
     app.state.engine = make_engine(settings)
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
+    app.state.redis = make_redis(settings)
 
     app.add_middleware(
         CORSMiddleware,

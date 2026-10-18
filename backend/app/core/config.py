@@ -27,6 +27,9 @@ class Settings(BaseSettings):
     access_token_expire_minutes: int = Field(default=30, gt=0)
     refresh_token_expire_days: int = Field(default=7, gt=0)
     cors_origins: Annotated[list[str], NoDecode] = ["http://localhost:5173"]
+    login_rate_limit_per_minute: int = Field(default=10, gt=0)  # per client IP (spec 08)
+    # Partner systems call the API with X-API-Key: "name:key,name2:key2".
+    partner_api_keys: SecretStr | None = None
 
     # Stores (127.0.0.1, not localhost: see the note in .env.example)
     database_url: str = "postgresql+asyncpg://fraudshield:fraudshield@127.0.0.1:5432/fraudshield"
@@ -62,6 +65,22 @@ class Settings(BaseSettings):
         """Accept a comma-separated string, as written in `.env`."""
         if isinstance(value, str):
             return [origin.strip() for origin in value.split(",") if origin.strip()]
+        return value
+
+    def partner_keys(self) -> dict[str, str]:
+        """{api_key: partner name} from PARTNER_API_KEYS."""
+        if self.partner_api_keys is None:
+            return {}
+        pairs = (item.split(":", 1) for item in self.partner_api_keys.get_secret_value().split(","))
+        return {key.strip(): name.strip() for name, key in pairs if key.strip()}
+
+    @field_validator("partner_api_keys")
+    @classmethod
+    def _check_partner_keys(cls, value: SecretStr | None) -> SecretStr | None:
+        if value is not None and any(
+            ":" not in item for item in value.get_secret_value().split(",")
+        ):
+            raise ValueError("PARTNER_API_KEYS must look like name:key,name2:key2")
         return value
 
     @field_validator("model_dir")

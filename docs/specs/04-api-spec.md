@@ -128,6 +128,14 @@ Response 200:
 ### 2.8 `GET /metrics/overview`
 → `{"txn_count", "fraud_caught", "amount_saved_inr", "false_positive_rate", "p95_latency_ms", "by_hour": [{"hour", "total", "flagged"}], "by_type": [{"scenario", "count"}], "by_city": [{"city", "flagged"}]}`
 
+### 2.9 Auth (endpoints 1-4) _(added in T3.2)_
+- `POST /auth/register` `{"name", "phone" (10-digit Indian mobile), "email", "password" (8-72 bytes), "language"?}` → **201** token pair. Creates a `customer` only (staff come from the seed/admin). Email is stored lower-case; taken → **409 `EMAIL_TAKEN`**.
+- `POST /auth/login` `{"email", "password"}` → token pair. Wrong email and wrong password give the same 401. More than `LOGIN_RATE_LIMIT_PER_MINUTE` (10) attempts per client IP per minute → **429 `RATE_LIMITED`** with `Retry-After`.
+- `POST /auth/refresh` `{"refresh_token"}` → new token pair. Each refresh token works once (rotation); reuse → 401.
+- `GET /auth/me` → `{"id", "name", "phone" (masked `98xxxxxx21`), "email", "role", "language"}`.
+- Token pair: `{"access_token", "refresh_token", "token_type": "bearer", "expires_in": 1800}`. JWT HS256 claims: `sub` (user id), `role`, `type` (`access`|`refresh`), `jti`, `iat`, `exp`. 401 responses carry `WWW-Authenticate: Bearer`.
+- Partners: `X-API-Key` checked against `PARTNER_API_KEYS` (`name:key,...` in `.env`, constant-time compare); no user row. Routers use `require_role(...)` or, where partners are allowed, `require_principal(...)` from `app/api/deps.py`.
+
 ## 3. WebSockets
 Both fed by Redis pub/sub (spec 02 §6) so they work with several API workers.
 

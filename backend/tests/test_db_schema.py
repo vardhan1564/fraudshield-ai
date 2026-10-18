@@ -5,26 +5,21 @@ Database tests use a separate `<db>_test` database (created if missing), never t
 Like test_services.py they skip locally without Docker and fail in CI.
 """
 
-import os
+import asyncio
 from collections.abc import AsyncIterator, Iterator
-from pathlib import Path
 
 import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
-from alembic.config import Config
 from alembic.migration import MigrationContext
 from sqlalchemy import text
-from sqlalchemy.engine import Connection, make_url
-from sqlalchemy.exc import DBAPIError, InterfaceError, OperationalError
+from sqlalchemy.engine import Connection
+from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
-from app.core.config import Settings
 from app.models import Base
 from scripts.seed import row_counts, seed
-
-BACKEND = Path(__file__).resolve().parents[1]
-IN_CI = os.environ.get("CI") == "true"
+from tests.conftest import alembic_config, ensure_test_db, test_db_url
 
 SPEC_TABLES = {
     "users": {"id", "external_id", "name", "phone", "email", "password_hash", "role", "language",
@@ -88,45 +83,12 @@ def test_spec_indexes_exist() -> None:
 # --- against a real Postgres -------------------------------------------------------------------
 
 
-def _test_db_url() -> str:
-    url = make_url(Settings().database_url)
-    return url.set(database=f"{url.database}_test").render_as_string(hide_password=False)
-
-
-async def _ensure_test_db(url: str) -> None:
-    admin = create_async_engine(
-        make_url(url).set(database="postgres"), isolation_level="AUTOCOMMIT"
-    )
-    name = make_url(url).database
-    try:
-        async with admin.connect() as conn:
-            exists = await conn.scalar(
-                text("select 1 from pg_database where datname = :n"), {"n": name}
-            )
-            if not exists:
-                await conn.execute(text(f'CREATE DATABASE "{name}"'))
-    except (OSError, OperationalError, InterfaceError) as exc:
-        if IN_CI:
-            pytest.fail(f"Postgres not reachable in CI: {exc}")
-        pytest.skip(f"Postgres not running (start infra with docker compose): {exc}")
-    finally:
-        await admin.dispose()
-
-
-def _alembic(url: str) -> Config:
-    cfg = Config(str(BACKEND / "alembic.ini"))
-    cfg.attributes["url"] = url
-    return cfg
-
-
 @pytest.fixture(scope="module")
 def migrated() -> Iterator[str]:
     """A test database at `head`, after a full downgrade/upgrade round trip."""
-    import asyncio
-
-    url = _test_db_url()
-    asyncio.run(_ensure_test_db(url))
-    cfg = _alembic(url)
+    url = test_db_url()
+    asyncio.run(ensure_test_db(url))
+    cfg = alembic_config(url)
     command.downgrade(cfg, "base")  # start clean even after an interrupted run
     command.upgrade(cfg, "head")
     command.downgrade(cfg, "base")

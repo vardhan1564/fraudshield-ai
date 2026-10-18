@@ -107,6 +107,8 @@ Indexes: transactions(user_id, ts desc), transactions(payee_id, ts desc), alerts
 | `graph:{account_id}` | hash | 10 min | graph_score, degree, pagerank, hops_to_fraud, community_ratio |
 | `rep:{vpa}` | hash | 10 min | reputation_score, report_count |
 | `rl:{api_key}` | int | 1 s | rate limit |
+| `rl:login:{ip}` | int | 60 s | login attempts this minute (T3.2) |
+| `refresh:{jti}` | string | refresh lifetime (7 d) | user id; deleted when the refresh token is used (rotation, T3.2) |
 
 Use Redis pipelines; one round trip per request.
 

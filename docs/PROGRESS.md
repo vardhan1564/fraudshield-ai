@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P2 Core ML (Gate A open) + P3 Backend
-- **Next task:** T3.2 Auth & roles (B); finish T2.6 Gate A in parallel
+- **Next task:** T3.3 Online feature service (A); finish T2.6 Gate A in parallel
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** IEEE retrain needs ~3 GB free memory (laptop at 19.7/20.7 GB commit with other apps open)
 
@@ -39,7 +39,7 @@
 
 ### P3 Backend (Weeks 5–7)
 - [x] T3.1 DB models, migrations, seed · B
-- [ ] T3.2 Auth & roles · B
+- [x] T3.2 Auth & roles · B
 - [ ] T3.3 Online feature service · A
 - [ ] T3.4 Model runtime + scoring endpoint · A
 - [ ] T3.5 Explanations · A
@@ -89,6 +89,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-18 · B · T3.2 done: /auth register (customer only, 409 EMAIL_TAKEN), login (same 401 for wrong email/password, bcrypt in a thread), refresh with rotation (refresh:{jti} in Redis, GETDEL: each token works once), me (masked phone). JWT HS256 30 min / 7 d with jti; require_role + require_principal (partner X-API-Key from PARTNER_API_KEYS, constant-time) in app/api/deps.py; login limit 10/min/IP -> 429 + Retry-After. 13 tests (success, wrong password, expired/forged/wrong-type token, 403 wrong role, refresh reuse, rate limit, partner key); spec 04 §2.9 + spec 05 Redis keys · next T3.3
 - 2026-10-18 · B · T3.1 done: 17 spec 05 tables as SQLAlchemy 2.0 models (11 Postgres enums, FKs, spec indexes incl. (user_id, ts desc)), async Alembic env + initial migration (upgrade/downgrade/upgrade clean, `alembic check` no drift), audit_log append-only trigger, scripts/seed.py (idempotent; users 23, trusted_contacts 20, payees 50 with 5 reported / 12 reports, rules 5; logins in git-ignored scripts/seed_credentials.local.txt). 8 new tests on a separate fraudshield_test DB; spec 05 §5 notes · next T3.2
 - 2026-10-18 · A · T2.6 in progress: ml/pipelines/evaluate.py writes ml/reports/eval_2026-10-18.md. Gate A FAILS: IEEE PR-AUC 0.470 (target > 0.80); simulated risk_score passes every target (PR-AUC 0.993, each scenario >= 88% HOLD, FPR gaps < 0.3 pt); all-models 1-row p95 30.1 ms vs < 30. Fix 1 (started): IEEE card-uid history features (ml/features/ieee.py, past-only) + Parquet cache of the IEEE CSVs; retrain OOM'd twice on this laptop. Fix 2: re-base the IEEE target (0.80 PR-AUC on a time split is above Kaggle-winner level) and keep 0.80 for the UPI data. Latency: inplace_predict in BaseModels.scores (untested yet)
 - 2026-10-18 · A · T2.5 done: ml/models/meta_model.py (logistic regression on txn/anomaly/social/graph scores wrapped in isotonic calibration, fitted on validation; thresholds chosen on out-of-fold predictions). thresholds.json: STEP_UP > 0.016 (val FPR 4.75%), HOLD > 0.25 (val FPR 0.54%). Test: PR-AUC 0.993, recall@HOLD 98.5%, FPR@HOLD 0.64%, Brier 0.0018, FPR gap city_tier 0.23 / age_band 0.28 pt; every scenario >= 88% HOLD, 100% STEP_UP+. Spec F2 met by an explicit rule (unknown call + new payee adds +0.25): risk 0.003 -> 0.256, min +0.238. Found the social model could score a payment LOWER when a call was added (up to -0.54 on small data), so added LightGBM monotone constraints on ctx_unknown_call/ctx_screen_share/ctx_call_long/coach_red_flags and retrained (investment_task after-coach recall 82.4% -> 88.2%) · next T2.6
