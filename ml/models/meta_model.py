@@ -39,7 +39,7 @@ from ml.features.schema import FEATURE_NAMES
 from ml.models import anomaly_model, social_model
 from ml.pipelines.datasets import Dataset
 from ml.pipelines.metrics import classification_metrics, fpr_gap, threshold_for_fpr
-from ml.pipelines.split import time_split
+from ml.pipelines.split import Split, time_split
 from ml.pipelines.train import DEFAULT_CONFIG, ROOT, data_hash, load_dataset, mlflow_client
 
 ARTIFACTS = ROOT / "ml" / "artifacts"
@@ -187,17 +187,22 @@ def _report(
     return out
 
 
-def train_meta(ds: Dataset, base: BaseModels, cfg: dict[str, Any]) -> MetaResult:
-    if ds.scenario is None:
-        raise ValueError("the meta-model is trained on the simulated dataset")
+def split_for(ds: Dataset, cfg: dict[str, Any], base: BaseModels) -> Split:
+    """The time split, after checking the saved models come from this exact train split
+    (otherwise val/test scores would leak)."""
     split = time_split(ds.ts, tuple(cfg["split"][k] for k in ("train", "val", "test")))
-    # The saved models must come from this exact train split, or val/test scores would leak.
     train_hash = data_hash(ds.X.iloc[split.train], ds.y[split.train])
     if train_hash != base.txn_meta.get("data_hash"):
         raise ValueError(
             "txn_model.json was trained on different data; re-run tune, anomaly and social first"
         )
+    return split
 
+
+def train_meta(ds: Dataset, base: BaseModels, cfg: dict[str, Any]) -> MetaResult:
+    if ds.scenario is None:
+        raise ValueError("the meta-model is trained on the simulated dataset")
+    split = split_for(ds, cfg, base)
     x_val, x_test = ds.X.iloc[split.val], ds.X.iloc[split.test]
     y_val, y_test = ds.y[split.val], ds.y[split.test]
     s_val, s_test = base.scores(x_val), base.scores(x_test)
@@ -417,4 +422,8 @@ def main(argv: list[str] | None = None) -> int:
 
 
 if __name__ == "__main__":
-    raise SystemExit(main())
+    # Run main() from the imported module: the pickled pipeline must reference
+    # ml.models.meta_model._logit_probabilities, not __main__, or nothing else can load it.
+    from ml.models import meta_model
+
+    raise SystemExit(meta_model.main())

@@ -6,10 +6,7 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 import pytest
-import yaml
 
-from ml.features.build import training_frame
-from ml.models import anomaly_model, social_model
 from ml.models.meta_model import (
     SCORE_COLUMNS,
     BaseModels,
@@ -22,16 +19,10 @@ from ml.models.meta_model import (
     rule_hits,
     train_meta,
 )
-from ml.pipelines.datasets import from_training_frame
+from ml.pipelines.datasets import Dataset
 from ml.pipelines.metrics import threshold_for_fpr
-from ml.pipelines.train import DEFAULT_CONFIG, train_model
-from ml.simulator.config import load_config
-from ml.simulator.run import simulate
+from ml.tests.conftest import CFG, config_for
 
-CFG = yaml.safe_load(DEFAULT_CONFIG.read_text(encoding="utf-8"))
-CFG["xgboost"]["num_boost_round"] = 150
-CFG["anomaly"]["autoencoder"]["epochs"] = 10
-CFG["social"]["lightgbm"]["num_boost_round"] = 150
 THRESHOLD_CFG = {"hold_fpr": 0.01, "step_up_fpr": 0.05}
 
 
@@ -99,33 +90,10 @@ def test_calibrated_meta_gives_probabilities_that_rise_with_txn_score() -> None:
 # --- full mini pipeline: base models -> meta-model ---------------------------------------------
 
 
-@pytest.fixture(scope="module")
-def setup(tmp_path_factory: pytest.TempPathFactory) -> tuple[Path, object]:
-    folder = tmp_path_factory.mktemp("artifacts")
-    tables = simulate(load_config(n_transactions=30_000, n_users=1_500))
-    for name in ("transactions", "users", "devices", "reports"):
-        tables[name].to_parquet(folder / f"{name}.parquet", index=False)
-    frame = training_frame(
-        tables["transactions"], tables["users"], tables["devices"], tables["reports"]
-    )
-    ds = from_training_frame(frame, warmup_days=14)
-
-    txn = train_model(ds, CFG)
-    txn.booster[: txn.params["best_iteration"] + 1].save_model(folder / "txn_model.json")
-    (folder / "txn_model.meta.json").write_text(
-        json.dumps({"data_hash": txn.data_hash, "version": "test"}), encoding="utf-8"
-    )
-    anomaly = anomaly_model.train_anomaly(ds, CFG)
-    anomaly_model.save(anomaly.winner.model, folder / "anomaly_model.pt", {})
-    social = social_model.train_social(ds, CFG)
-    social_model.save(social, folder / "social_model.txt")
-    return folder, ds
-
-
-def test_meta_end_to_end(setup: tuple[Path, object]) -> None:
-    folder, ds = setup
+def test_meta_end_to_end(mini_artifacts: tuple[Path, Dataset]) -> None:
+    folder, ds = mini_artifacts
     base = BaseModels.load(folder)
-    scores = base.scores(ds.X.head(200))  # type: ignore[attr-defined]
+    scores = base.scores(ds.X.head(200))
     assert (
         list(scores.columns) == SCORE_COLUMNS
         and scores.to_numpy().min() >= 0
@@ -133,7 +101,7 @@ def test_meta_end_to_end(setup: tuple[Path, object]) -> None:
     )
     assert (scores["graph_score"] == 0).all()
 
-    result = train_meta(ds, base, CFG)  # type: ignore[arg-type]
+    result = train_meta(ds, base, CFG)
     assert result.thresholds["step_up"] <= result.thresholds["hold"]
     oof = result.metrics["val_oof"]
     assert oof["fpr"] <= 0.0101 and oof["fpr_step_up_or_hold"] <= 0.0501  # spec 03 section 5
@@ -146,32 +114,21 @@ def test_meta_end_to_end(setup: tuple[Path, object]) -> None:
 
 
 def test_meta_refuses_base_models_from_other_data(
-    setup: tuple[Path, object], tmp_path: Path
+    mini_artifacts: tuple[Path, Dataset], tmp_path: Path
 ) -> None:
-    folder, ds = setup
+    folder, ds = mini_artifacts
     for f in folder.iterdir():
         (tmp_path / f.name).write_bytes(f.read_bytes())
     (tmp_path / "txn_model.meta.json").write_text(
         json.dumps({"data_hash": "different"}), encoding="utf-8"
     )
     with pytest.raises(ValueError, match="different data"):
-        train_meta(ds, BaseModels.load(tmp_path), CFG)  # type: ignore[arg-type]
+        train_meta(ds, BaseModels.load(tmp_path), CFG)
 
 
-def test_cli_writes_thresholds_json(setup: tuple[Path, object]) -> None:
-    folder, _ = setup
-    cfg = {
-        **CFG,
-        "datasets": {
-            "simulated": {
-                "features": str(folder / "missing.parquet"),
-                "raw_dir": str(folder),
-                "warmup_days": 14,
-            }
-        },
-    }
-    config = folder / "config.yaml"
-    config.write_text(yaml.safe_dump(cfg), encoding="utf-8")
+def test_cli_writes_thresholds_json(mini_artifacts: tuple[Path, Dataset]) -> None:
+    folder, _ = mini_artifacts
+    config = config_for(folder)
     assert main(["--config", str(config), "--artifacts", str(folder), "--no-mlflow"]) == 0
     th = json.loads((folder / "thresholds.json").read_text(encoding="utf-8"))
     assert th["step_up"] <= th["hold"] and th["inputs"] == SCORE_COLUMNS
