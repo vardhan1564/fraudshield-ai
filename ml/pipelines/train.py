@@ -32,6 +32,33 @@ from ml.pipelines.split import time_split
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = Path(__file__).with_name("config.yaml")
 SHAP_ROWS = 2_000
+CHUNK_ROWS = 100_000  # rows handed to XGBoost at a time while it bins the data
+
+
+class _Chunks(xgb.DataIter):
+    """Feeds a DataFrame to QuantileDMatrix in slices. XGBoost then never copies the whole
+    frame into one dense array (1.3 GB for IEEE train, more than this laptop has free)."""
+
+    def __init__(self, X: pd.DataFrame, y: np.ndarray) -> None:
+        self._X, self._y, self._at = X, y, 0
+        super().__init__(release_data=True)
+
+    def next(self, input_data: Any) -> bool:
+        if self._at >= len(self._X):
+            return False
+        end = self._at + CHUNK_ROWS
+        input_data(data=self._X.iloc[self._at : end], label=self._y[self._at : end])
+        self._at = end
+        return True
+
+    def reset(self) -> None:
+        self._at = 0
+
+
+def _binned(
+    X: pd.DataFrame, y: np.ndarray, bins: int, ref: xgb.QuantileDMatrix | None = None
+) -> xgb.QuantileDMatrix:
+    return xgb.QuantileDMatrix(_Chunks(X, y), enable_categorical=True, max_bin=bins, ref=ref)
 
 
 @dataclass
@@ -89,17 +116,13 @@ def prepare(ds: Dataset, cfg: dict[str, Any]) -> Prepared:
     if not y_train.any() or not y_val.any():
         raise ValueError("train and validation both need fraud rows; use more data")
     bins = cfg["xgboost"]["params"].get("max_bin", 256)  # same for all matrices and the booster
-    dtrain = xgb.QuantileDMatrix(x_train, label=y_train, enable_categorical=True, max_bin=bins)
+    dtrain = _binned(x_train, y_train, bins)
     return Prepared(
         name=ds.name,
         features=list(ds.features),
         dtrain=dtrain,
-        dval=xgb.QuantileDMatrix(
-            x_val, label=y_val, enable_categorical=True, max_bin=bins, ref=dtrain
-        ),
-        dtest=xgb.QuantileDMatrix(
-            x_test, label=y_test, enable_categorical=True, max_bin=bins, ref=dtrain
-        ),
+        dval=_binned(x_val, y_val, bins, ref=dtrain),
+        dtest=_binned(x_test, y_test, bins, ref=dtrain),
         y_train=y_train,
         y_val=y_val,
         y_test=y_test,
@@ -272,7 +295,12 @@ def load_dataset(name: str, cfg: dict[str, Any]) -> Dataset:
     if name == "simulated":
         return load_simulated(ROOT / d["features"], ROOT / d["raw_dir"], d["warmup_days"])
     if name == "ieee":
-        return load_ieee(ROOT / d["raw_dir"], d.get("max_rows"), d.get("engineered", False))
+        return load_ieee(
+            ROOT / d["raw_dir"],
+            d.get("max_rows"),
+            d.get("engineered", False),
+            cfg["split"]["train"],
+        )
     raise ValueError(f"unknown dataset {name!r}")
 
 

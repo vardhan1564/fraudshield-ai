@@ -81,9 +81,8 @@ class BaseModels:
         )  # first decision: no coach yet
         return pd.DataFrame(
             {
-                "txn_score": self.txn.predict(
-                    xgb.DMatrix(X[FEATURE_NAMES], enable_categorical=True)
-                ),
+                # inplace_predict skips building a DMatrix: ~5 ms less per call (spec 03 §6).
+                "txn_score": self.txn.inplace_predict(X[FEATURE_NAMES]),
                 "anomaly_score": self.anomaly.score(X),
                 "social_eng_score": self.social.predict(social_in),
                 "graph_score": X["graph_score"].astype("float64").to_numpy(),  # 0 until phase 5

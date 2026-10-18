@@ -14,7 +14,7 @@ import pyarrow as pa
 import pyarrow.parquet as pq
 
 from ml.features.build import training_frame
-from ml.features.ieee import add_ieee_features
+from ml.features.ieee import add_ieee_features, reduce_v_columns
 from ml.features.schema import FEATURE_NAMES
 
 
@@ -113,10 +113,17 @@ def _read_ieee_csv(path: Path) -> pd.DataFrame:
     return table.to_pandas(self_destruct=True, split_blocks=True)
 
 
-def load_ieee(raw_dir: Path, max_rows: int | None = None, engineered: bool = False) -> Dataset:
-    """`engineered` adds the card-uid history features from ml/features/ieee.py."""
+def load_ieee(
+    raw_dir: Path,
+    max_rows: int | None = None,
+    engineered: bool = False,
+    train_share: float = 0.70,
+) -> Dataset:
+    """`engineered` adds the card-uid history features from ml/features/ieee.py and drops the
+    redundant V-columns, chosen on the first `train_share` of rows (the training period) only."""
     txn = _read_ieee_csv(raw_dir / "train_transaction.csv")
-    txn = txn.sort_values("TransactionDT", kind="stable", ignore_index=True)
+    if not txn["TransactionDT"].is_monotonic_increasing:  # the file is already in time order
+        txn = txn.sort_values("TransactionDT", kind="stable", ignore_index=True)
     if max_rows:
         txn = txn.iloc[:max_rows]
     # Add identity columns one by one (NaN where a transaction has none). A merge would copy the
@@ -129,14 +136,15 @@ def load_ieee(raw_dir: Path, max_rows: int | None = None, engineered: bool = Fal
             txn[col] = idn[col].to_numpy() if idn[col].dtype != "category" else idn[col].array
     del idn
     if engineered:
+        train_rows = txn.iloc[: int(len(txn) * train_share)]
+        keep = set(reduce_v_columns(train_rows))
+        del train_rows
+        txn.drop(columns=[c for c in txn.columns if c.startswith("V") and c not in keep],
+                 inplace=True)  # fmt: skip
         add_ieee_features(txn)
 
-    features = [c for c in txn.columns if c not in IEEE_ID_COLS]  # not the id, label or clock
-    return Dataset(
-        name="ieee",
-        X=txn[features],
-        y=txn["isFraud"].to_numpy(),
-        ts=txn["TransactionDT"],
-        scenario=None,
-        features=features,
-    )
+    # Take the label and clock out in place: txn[features] would copy the whole ~1 GB table.
+    y = txn.pop("isFraud").to_numpy()
+    ts = txn.pop("TransactionDT")
+    del txn["TransactionID"]
+    return Dataset(name="ieee", X=txn, y=y, ts=ts, scenario=None, features=list(txn.columns))

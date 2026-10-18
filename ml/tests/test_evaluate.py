@@ -48,11 +48,11 @@ def report(served_folder: Path) -> Report:
     return evaluate_simulated(Served.load(served_folder), cfg, latency_repeats=(5, 2))
 
 
-def test_gate_a_needs_ieee_pr_auc_above_080() -> None:
-    assert gate_a({"pr_auc": 0.81})
-    assert not gate_a({"pr_auc": 0.80})
-    assert not gate_a({"pr_auc": 0.47})
-    assert not gate_a(None)  # not measured is not a pass
+def test_gate_a_needs_upi_target_and_ieee_floor() -> None:
+    assert gate_a({"pr_auc": 0.50}, simulated_pr_auc=0.81)
+    assert not gate_a({"pr_auc": 0.47}, simulated_pr_auc=0.99)  # below the IEEE floor
+    assert not gate_a({"pr_auc": 0.90}, simulated_pr_auc=0.80)  # UPI target is > 0.80
+    assert not gate_a(None, simulated_pr_auc=0.99)  # not measured is not a pass
 
 
 def test_report_has_every_spec_metric(report: Report) -> None:

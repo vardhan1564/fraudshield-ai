@@ -4,7 +4,7 @@ import numpy as np
 import pandas as pd
 import pytest
 
-from ml.features.ieee import add_ieee_features
+from ml.features.ieee import add_ieee_features, reduce_v_columns
 
 DAY = 86_400
 
@@ -52,3 +52,20 @@ def test_future_rows_do_not_change_past_features() -> None:
 def test_unsorted_frame_is_rejected() -> None:
     with pytest.raises(ValueError, match="sort"):
         add_ieee_features(_frame().iloc[::-1].reset_index(drop=True))
+
+
+def test_reduce_v_columns_keeps_one_of_each_near_copy() -> None:
+    rng = np.random.default_rng(0)
+    base, other = rng.normal(size=500), rng.normal(size=500)
+    gap = np.where(np.arange(500) < 100, np.nan, 1.0)  # V4/V5 share a missing pattern
+    df = pd.DataFrame(
+        {
+            "V1": base,
+            "V2": base * 2 + 0.01 * rng.normal(size=500),  # near-copy of V1: dropped
+            "V3": other,  # same missing pattern, unrelated: kept
+            "V4": base * gap,
+            "V5": -base * gap,  # perfectly anti-correlated with V4: dropped
+            "card1": base,  # not a V-column: never considered
+        }
+    )
+    assert reduce_v_columns(df) == ["V1", "V3", "V4"]

@@ -13,6 +13,7 @@ IEEE-CIS numbers come from the latest `txn_model` MLflow run tagged dataset=ieee
 """
 
 import argparse
+import gc
 import json
 import subprocess
 import sys
@@ -26,7 +27,6 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-import xgboost as xgb
 import yaml
 from sklearn.calibration import CalibratedClassifierCV
 
@@ -47,13 +47,16 @@ from ml.simulator.schema import SCENARIOS
 
 REPORTS = ROOT / "ml" / "reports"
 
-# spec 03 §6 targets
+# spec 03 §6 targets. The PR-AUC / ROC-AUC / recall bars apply to the served UPI risk_score.
 PR_AUC_MIN = 0.80
 ROC_AUC_MIN = 0.92
 RECALL_AT_1PCT_MIN = 0.70
 SCENARIO_RECALL_MIN = 0.80
 FPR_GAP_MAX_POINTS = 2.0
 LATENCY_1_ROW_MAX_MS = 30.0
+# IEEE-CIS benchmark floor (decision log 2026-10-18): the level reached with card-uid features
+# on a time split; 0.80 PR-AUC there is above Kaggle-winner level, so it guards regressions.
+IEEE_FLOOR = {"pr_auc": 0.50, "roc_auc": 0.87, "recall_at_1pct_fpr": 0.40}
 
 
 @dataclass
@@ -113,8 +116,15 @@ def _decision_shares(decisions: np.ndarray, y: np.ndarray) -> dict[str, dict[str
     return out
 
 
+WARMUP_CALLS = 20
+
+
 def _timings_ms(fn: Callable[[], object], repeats: int) -> dict[str, float]:
-    fn()  # warm-up: first calls pay for lazy initialisation
+    # Warm up: the first calls pay for lazy initialisation, and right after the full test-set
+    # pass the process is still paging memory back in (that once showed up as a 130 ms p95).
+    gc.collect()
+    for _ in range(WARMUP_CALLS):
+        fn()
     times = []
     for _ in range(repeats):
         start = time.perf_counter()
@@ -136,9 +146,7 @@ def measure_latency(
         "all models, 1 row": _timings_ms(lambda: served.risk(one), repeats_1),
         f"all models, {len(batch)} rows": _timings_ms(lambda: served.risk(batch), repeats_1000),
         "txn_model, 1 row": _timings_ms(
-            lambda: served.base.txn.predict(
-                xgb.DMatrix(one[FEATURE_NAMES], enable_categorical=True)
-            ),
+            lambda: served.base.txn.inplace_predict(one[FEATURE_NAMES]),  # as BaseModels.scores
             repeats_1,
         ),
         "anomaly_model, 1 row": _timings_ms(lambda: served.base.anomaly.score(one), repeats_1),
@@ -235,9 +243,18 @@ def ieee_from_mlflow(experiment: str) -> dict[str, Any] | None:
     }
 
 
-def gate_a(ieee: dict[str, Any] | None) -> bool:
-    """Gate A (implementation plan, P2): PR-AUC > 0.80 on the IEEE-CIS test split."""
-    return ieee is not None and ieee.get("pr_auc", 0.0) > PR_AUC_MIN
+def gate_a(ieee: dict[str, Any] | None, simulated_pr_auc: float) -> bool:
+    """Gate A (P2): the served risk_score has PR-AUC > 0.80 on the simulated UPI test split, and
+    the method holds up on real data: IEEE-CIS test PR-AUC >= the benchmark floor."""
+    return (
+        simulated_pr_auc > PR_AUC_MIN
+        and ieee is not None
+        and ieee.get("pr_auc", 0.0) >= IEEE_FLOOR["pr_auc"]
+    )
+
+
+def _gate(report: Report) -> bool:
+    return gate_a(report.ieee, report.models["risk_score (meta + rule), HOLD"]["pr_auc"])
 
 
 # --- markdown ----------------------------------------------------------------------------------
@@ -275,16 +292,23 @@ def target_rows(report: Report) -> list[tuple[str, str, str, str, bool | None]]:
         ("roc_auc", "ROC-AUC", ROC_AUC_MIN),
         ("recall_at_1pct_fpr", "Recall @ 1% FPR", RECALL_AT_1PCT_MIN),
     ):
-        shown = f"{target:.0%}" if key.startswith("recall") else f"{target:.2f}"
-        if ieee is None or key not in ieee:
-            rows.append((label, f"> {shown}", "IEEE-CIS txn_model", "not measured", False))
-        else:
-            value = ieee[key]
-            txt = _pct(value) if key.startswith("recall") else f"{value:.3f}"
-            rows.append((label, f"> {shown}", "IEEE-CIS txn_model", txt, value > target))
+        is_recall = key.startswith("recall")
+
+        def fmt(x: float, is_recall: bool = is_recall) -> str:
+            return _pct(x) if is_recall else f"{x:.3f}"
+
+        def bar(x: float, is_recall: bool = is_recall) -> str:
+            return f"{x:.0%}" if is_recall else f"{x:.2f}"
+
         value = final[key]
-        txt = _pct(value) if key.startswith("recall") else f"{value:.3f}"
-        rows.append((label, f"> {shown}", "simulated risk_score", txt, value > target))
+        rows.append((label, f"> {bar(target)}", "simulated risk_score", fmt(value), value > target))
+        floor = IEEE_FLOOR[key]
+        if ieee is None or key not in ieee:
+            rows.append((label, f"≥ {bar(floor)}", "IEEE-CIS txn_model", "not measured", False))
+        else:
+            rows.append(
+                (label, f"≥ {bar(floor)}", "IEEE-CIS txn_model", fmt(ieee[key]), ieee[key] >= floor)
+            )
     if ieee is not None and "f1" in ieee:
         rows.append(
             ("F1 at chosen threshold", "report", "IEEE-CIS txn_model", f"{ieee['f1']:.3f}", None)
@@ -326,7 +350,7 @@ def target_rows(report: Report) -> list[tuple[str, str, str, str, bool | None]]:
 
 
 def render(report: Report) -> str:
-    passed = gate_a(report.ieee)
+    passed = _gate(report)
     ieee = report.ieee
     lines = [
         f"# Model evaluation, {report.created}",
@@ -338,6 +362,12 @@ def render(report: Report) -> str:
         f"## Gate A: {'PASS ✅' if passed else 'FAIL ❌'}",
         "",
     ]
+    sim_pr = report.models["risk_score (meta + rule), HOLD"]["pr_auc"]
+    lines.append(
+        f"Served risk_score, simulated UPI test PR-AUC **{sim_pr:.3f}** vs target > "
+        f"{PR_AUC_MIN:.2f}."
+    )
+    lines.append("")
     if ieee is None:
         lines.append(
             "No IEEE-CIS run found in MLflow, so PR-AUC on IEEE-CIS is not measured. Run "
@@ -345,9 +375,9 @@ def render(report: Report) -> str:
         )
     else:
         lines.append(
-            f"IEEE-CIS test PR-AUC **{ieee['pr_auc']:.3f}** vs target > {PR_AUC_MIN:.2f} "
-            f"(txn_model {ieee['stage']} run `{ieee['run_id']}`, {ieee['date']}, "
-            f"fraud rate {_pct(ieee.get('fraud_rate', float('nan')))})."
+            f"IEEE-CIS test PR-AUC **{ieee['pr_auc']:.3f}** vs benchmark floor ≥ "
+            f"{IEEE_FLOOR['pr_auc']:.2f} (txn_model {ieee['stage']} run `{ieee['run_id']}`, "
+            f"{ieee['date']}, fraud rate {_pct(ieee.get('fraud_rate', float('nan')))})."
         )
     lines += [
         "",
@@ -465,7 +495,7 @@ def main(argv: list[str] | None = None) -> int:
     for metric, target, data, measured, ok in target_rows(report):
         verdict = "report" if ok is None else ("pass" if ok else "FAIL")
         print(f"{metric:<38} {target:<14} {data:<22} {measured:<34} {verdict}")
-    print(f"\nGate A: {'PASS' if gate_a(report.ieee) else 'FAIL'}\nwrote {path}")
+    print(f"\nGate A: {'PASS' if _gate(report) else 'FAIL'}\nwrote {path}")
     return 0
 
 

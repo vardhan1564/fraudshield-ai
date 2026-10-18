@@ -7,6 +7,8 @@ key (the frame must be sorted by TransactionDT), so nothing leaks from the futur
 ml/features for the UPI data.
 """
 
+import warnings
+
 import numpy as np
 import pandas as pd
 
@@ -15,6 +17,34 @@ SECONDS_PER_DAY = 86_400
 D_COLS = ("D1", "D2", "D3", "D4", "D10", "D11", "D15")
 COUNT_KEYS = ("card1", "addr1", "P_emaildomain", "uid", "uid2")
 UID_KEYS = ("uid", "uid2")
+
+
+def reduce_v_columns(
+    df: pd.DataFrame, max_corr: float = 0.75, sample_rows: int = 100_000, seed: int = 42
+) -> list[str]:
+    """The V-columns worth keeping (most of the 339 are near-copies of each other).
+
+    Columns with the same number of missing values belong to the same group; inside a group a
+    column is kept only if its |correlation| with every column kept so far is <= max_corr.
+    Pass only training-period rows: the choice must not look at validation or test data.
+    """
+    v_cols = [c for c in df.columns if c.startswith("V") and c[1:].isdigit()]
+    sample = df[v_cols].sample(min(sample_rows, len(df)), random_state=seed)
+    missing = sample.isna().sum()
+    keep: list[str] = []
+    for _, group in missing.groupby(missing, sort=True):
+        cols = list(group.index)
+        if len(cols) == 1:
+            keep += cols
+            continue
+        corr = sample[cols].corr().abs().fillna(0.0)
+        kept: list[str] = []
+        for col in cols:
+            if all(corr.at[col, k] <= max_corr for k in kept):
+                kept.append(col)
+        keep += kept
+    order = {c: i for i, c in enumerate(v_cols)}
+    return sorted(keep, key=order.__getitem__)
 
 
 def _group_ids(df: pd.DataFrame, cols: list[str]) -> np.ndarray:
@@ -65,6 +95,8 @@ def add_ieee_features(df: pd.DataFrame) -> list[str]:
         last = pd.Series(ts).groupby(g).shift(1).to_numpy(dtype="float64")
         new[f"{key}_secs_since_last"] = (ts - last).astype("float32")
 
-    for name, values in new.items():
-        df[name] = values
+    with warnings.catch_warnings():  # one insert per column is intended (no full-frame copy)
+        warnings.simplefilter("ignore", pd.errors.PerformanceWarning)
+        for name, values in new.items():
+            df[name] = values
     return list(new)
