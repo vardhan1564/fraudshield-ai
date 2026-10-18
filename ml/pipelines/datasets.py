@@ -23,9 +23,18 @@ class Dataset:
     ts: pd.Series  # sort key for the time split
     scenario: pd.Series | None  # simulator ground truth, for per-scenario recall
     features: list[str]
+    groups: pd.DataFrame | None = None  # city_tier, age_band per row, for fairness checks
 
 
-def from_training_frame(frame: pd.DataFrame, warmup_days: int) -> Dataset:
+def user_groups(transactions: pd.DataFrame, users: pd.DataFrame) -> pd.DataFrame:
+    """The paying customer's city tier and age band per txn_id (fairness groups, spec 03 §6)."""
+    profile = users.set_index("user_id")[["city_tier", "age_band"]]
+    return profile.reindex(transactions["user_id"]).set_axis(transactions["txn_id"])
+
+
+def from_training_frame(
+    frame: pd.DataFrame, warmup_days: int, groups: pd.DataFrame | None = None
+) -> Dataset:
     """Drop the first warmup_days: their features lack history (e.g. every payee looks new)."""
     start = frame["ts"].min() + pd.Timedelta(days=warmup_days)
     kept = frame[frame["ts"] >= start].sort_values("ts", kind="stable")
@@ -36,19 +45,24 @@ def from_training_frame(frame: pd.DataFrame, warmup_days: int) -> Dataset:
         ts=kept["ts"],
         scenario=kept["scenario"],
         features=list(FEATURE_NAMES),
+        groups=None if groups is None else groups.reindex(kept.index),
     )
 
 
 def load_simulated(features_path: Path, raw_dir: Path, warmup_days: int) -> Dataset:
+    raw = {
+        name: pd.read_parquet(raw_dir / f"{name}.parquet")
+        for name in ("transactions", "users", "devices", "reports")
+        if (raw_dir / f"{name}.parquet").exists()
+    }
     if features_path.exists():
         frame = pd.read_parquet(features_path)
     else:  # build on the fly from the simulator output
-        tables = {
-            name: pd.read_parquet(raw_dir / f"{name}.parquet")
-            for name in ("transactions", "users", "devices", "reports")
-        }
-        frame = training_frame(**tables)
-    return from_training_frame(frame, warmup_days)
+        frame = training_frame(raw["transactions"], raw["users"], raw["devices"], raw["reports"])
+    groups = None  # fairness groups need the raw transactions and users
+    if "transactions" in raw and "users" in raw:
+        groups = user_groups(raw["transactions"], raw["users"])
+    return from_training_frame(frame, warmup_days, groups)
 
 
 # IEEE-CIS text columns (Kaggle data description); everything else is numeric.

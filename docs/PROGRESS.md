@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P2 Core ML
-- **Next task:** T2.2 Tuning + SHAP + model card (A)
+- **Next task:** T2.3 Anomaly model (A)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none
 
@@ -31,7 +31,7 @@
 
 ### P2 Core ML (Weeks 3–5)
 - [x] T2.1 Transaction model baseline · A
-- [ ] T2.2 Tuning + SHAP + model card · A
+- [x] T2.2 Tuning + SHAP + model card · A
 - [ ] T2.3 Anomaly model · A
 - [ ] T2.4 Social-engineering model · A
 - [ ] T2.5 Meta-model + thresholds · A
@@ -89,6 +89,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-18 · A · T2.2 done: ml/pipelines/tune.py (Optuna TPE 30 trials, exact val PR-AUC objective, median pruning; data binned once and shared by trials). Served model ml/artifacts/txn_model.json (+ meta: threshold 0.00311, features, metrics), MLflow registry txn_model v1, SHAP summary (XGBoost TreeSHAP) in MLflow, MODEL_CARD.md generated. Simulated test PR-AUC 0.9994, all scenarios 100%, FPR gap city_tier 0.71 pt / age_band 0.59 pt. SHAP confirms payee_account_age_days dominates (mean |SHAP| 4.3 vs 1.4 next): simulator realism pass still recommended. IEEE tuning supported (--dataset ieee --timeout) but ~15 min/trial, not run yet · next T2.3
 - 2026-10-18 · A · T2.1 done: ml/pipelines (config.yaml, split.py time 70/15/15, metrics.py, datasets.py, train.py; XGBoost hist + scale_pos_weight, early stopping on val PR-AUC, threshold at 1% FPR on val). MLflow runs in `txn_model`. Simulated (14-day warm-up): test PR-AUC 0.999, all scenarios 100% recall (simulator too easy, see below). IEEE (431 cols, 15 min, peak 3.1 GB with page file): test PR-AUC 0.470, ROC-AUC 0.868, recall@1%FPR 0.393; best iteration 1855 of 2000 (still improving). Fixed a simulator leak (fraud rows had exact home GPS -> ip_distance_km == 0). Follow-ups: (1) Gate A PR-AUC > 0.80 on IEEE looks unrealistic for a time split (Kaggle winners ~0.93-0.95 ROC-AUC); IEEE needs feature engineering (card/address uid aggregates, frequency encodings) + tuning in T2.2, then decide the target at T2.6; (2) make the simulator harder (legit young payees, legit screen-share/unknown calls, aged mule accounts) so simulated metrics mean something · next T2.2
 - 2026-10-17 · B · T0.4 done: private repo github.com/vardhan1564/fraudshield-ai; first CI run failed (ml tests need pyarrow, CI installs only dev + backend), fixed by pinning pyarrow in requirements-dev.txt; run 39049205676 green: lint + 75 tests, 98% coverage, postgres/redis service tests ran (not skipped). gh token needed the `workflow` scope to push ci.yml · next T2.1
 - 2026-10-17 · A · T1.3 done: ml/features (schema.py -> features.json, 38 features exactly as spec 03 §2; txn, velocity, payee, device, context groups; pure functions; windows strictly earlier, O(n log n)). 17 tests: 50-row hand-computed fixture incl. window edges, cut-off no-leakage check on fixture + simulator. 100k build in 1.3 s. Spec 03 §2 definitions added. Follow-up for T2.1: payee_is_new is 0.72 on legit rows because simulated users have no history before day 1, so use the first ~14 days as warm-up (features only, no training) or add pre-window history · P1 gate passed · next T2.1

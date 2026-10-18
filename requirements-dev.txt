@@ -6,3 +6,5 @@ pytest==9.1.1
 pytest-asyncio==1.4.0
 pytest-cov==7.1.0
 pyarrow==25.0.1  # parquet in the ml tests; keep the same pin as ml/requirements.txt
+optuna==5.0.0  # tuning tests; same pin as ml/requirements.txt
+matplotlib==3.11.2  # SHAP plot test; same pin as ml/requirements.txt

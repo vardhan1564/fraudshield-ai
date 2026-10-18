@@ -21,11 +21,17 @@ import yaml
 
 from ml.features.schema import to_json
 from ml.pipelines.datasets import Dataset, load_ieee, load_simulated
-from ml.pipelines.metrics import classification_metrics, scenario_recall, threshold_for_fpr
+from ml.pipelines.metrics import (
+    classification_metrics,
+    fpr_gap,
+    scenario_recall,
+    threshold_for_fpr,
+)
 from ml.pipelines.split import time_split
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_CONFIG = Path(__file__).with_name("config.yaml")
+SHAP_ROWS = 2_000
 
 
 @dataclass
@@ -42,6 +48,8 @@ class Prepared:
     y_test: np.ndarray
     test_scenario: pd.Series | None
     data_hash: str
+    test_groups: pd.DataFrame | None = None  # city_tier, age_band of the test rows
+    shap_sample: pd.DataFrame | None = None  # up to SHAP_ROWS test rows, for explanations
 
 
 @dataclass
@@ -56,6 +64,7 @@ class TrainResult:
     sizes: dict[str, int] = field(default_factory=dict)
     data_hash: str = ""
     seconds: float = 0.0
+    fairness: dict[str, float] = field(default_factory=dict)  # FPR gap in points per group
 
 
 def _rows(frame: pd.DataFrame, positions: np.ndarray) -> pd.DataFrame:
@@ -96,15 +105,19 @@ def prepare(ds: Dataset, cfg: dict[str, Any]) -> Prepared:
         y_test=y_test,
         test_scenario=None if ds.scenario is None else ds.scenario.iloc[split.test],
         data_hash=data_hash(x_train, y_train),
+        test_groups=None if ds.groups is None else ds.groups.iloc[split.test],
+        shap_sample=x_test.sample(min(SHAP_ROWS, len(x_test)), random_state=cfg["seed"]).copy(),
     )
 
 
-def fit(prep: Prepared, cfg: dict[str, Any]) -> TrainResult:
+def fit(prep: Prepared, cfg: dict[str, Any], tuned: dict[str, Any] | None = None) -> TrainResult:
+    """Train with config params, overridden by `tuned` (e.g. Optuna's best), and evaluate."""
     started = time.perf_counter()
     xcfg = cfg["xgboost"]
     positives = int(prep.y_train.sum())
     params = {
         **xcfg["params"],
+        **(tuned or {}),
         "objective": "binary:logistic",
         "scale_pos_weight": (len(prep.y_train) - positives) / positives,  # legit / fraud in train
         "seed": cfg["seed"],
@@ -139,6 +152,8 @@ def fit(prep: Prepared, cfg: dict[str, Any]) -> TrainResult:
     )
     if prep.test_scenario is not None:
         result.scenario_recall = scenario_recall(prep.test_scenario, s_test > threshold)
+    if prep.test_groups is not None:
+        result.fairness = fpr_gap(prep.y_test, s_test > threshold, prep.test_groups)
     result.seconds = time.perf_counter() - started
     return result
 
@@ -175,11 +190,27 @@ def format_table(result: TrainResult) -> str:
         lines += ["", f"{'test recall by scenario':<26}{'recall':>8}"]
         for name, value in sorted(result.scenario_recall.items()):
             lines.append(f"{name:<26}{value:>8.1%}")
+    if result.fairness:
+        lines += ["", "test FPR gap between groups (target < 2 points)"]
+        for col, gap in result.fairness.items():
+            lines.append(f"{col:<26}{gap:>6.2f} pt")
     return "\n".join(lines)
 
 
-def log_to_mlflow(result: TrainResult, cfg: dict[str, Any], table: str) -> str:
-    """Log params, metrics, feature list, data hash and the model; returns the run id."""
+def log_to_mlflow(
+    result: TrainResult,
+    cfg: dict[str, Any],
+    table: str,
+    *,
+    stage: str = "baseline",
+    extra_params: dict[str, Any] | None = None,
+    artifacts: list[Path] | None = None,
+    register: bool = False,
+) -> tuple[str, str | None]:
+    """Log params, metrics, feature list, data hash and the model.
+
+    Returns (run id, registered model version or None).
+    """
     os.environ.setdefault("MLFLOW_DISABLE_AGENT_HINT", "1")
     import mlflow  # heavy and not installed in CI, so only imported when logging
     import mlflow.xgboost
@@ -190,12 +221,12 @@ def log_to_mlflow(result: TrainResult, cfg: dict[str, Any], table: str) -> str:
     # On Windows "localhost" tries IPv6 first and adds ~2 s to every one of MLflow's calls.
     mlflow.set_tracking_uri(uri.replace("//localhost", "//127.0.0.1"))
     mlflow.set_experiment(cfg["mlflow"]["experiment"])
-    with mlflow.start_run(run_name=f"baseline-{result.name}") as run:
+    with mlflow.start_run(run_name=f"{stage}-{result.name}") as run:
         mlflow.set_tags(
             {
                 "dataset": result.name,
                 "model": "txn_model",
-                "stage": "baseline",
+                "stage": stage,
                 "data_hash": result.data_hash,
             }
         )
@@ -205,16 +236,25 @@ def log_to_mlflow(result: TrainResult, cfg: dict[str, Any], table: str) -> str:
                 "threshold": round(result.threshold, 6),
                 "n_features": len(result.features),
                 **{f"n_{k}": v for k, v in result.sizes.items()},
+                **(extra_params or {}),
             }
         )
         metrics = {f"{part}_{k}": v for part, m in result.metrics.items() for k, v in m.items()}
         metrics |= {f"test_recall_{k}": v for k, v in result.scenario_recall.items()}
+        metrics |= {f"test_fpr_gap_{k}": v for k, v in result.fairness.items()}
         mlflow.log_metrics(metrics)
         features = to_json() if result.name == "simulated" else {"features": result.features}
         mlflow.log_dict(features, "features.json")
         mlflow.log_text(table, "metrics.txt")
-        mlflow.xgboost.log_model(result.booster, name="model")
-        return str(run.info.run_id)
+        for path in artifacts or []:
+            mlflow.log_artifact(str(path))
+        info = mlflow.xgboost.log_model(
+            result.booster,
+            name="model",
+            registered_model_name="txn_model" if register else None,
+        )
+        version = getattr(info, "registered_model_version", None)
+        return str(run.info.run_id), None if version is None else str(version)
 
 
 def load_dataset(name: str, cfg: dict[str, Any]) -> Dataset:
@@ -246,7 +286,7 @@ def main(argv: list[str] | None = None) -> int:
     table = format_table(result)
     print(table)
     if not args.no_mlflow:
-        run_id = log_to_mlflow(result, cfg, table)
+        run_id, _ = log_to_mlflow(result, cfg, table)
         print(f"\nMLflow run {run_id} in experiment '{cfg['mlflow']['experiment']}'")
     return 0
 

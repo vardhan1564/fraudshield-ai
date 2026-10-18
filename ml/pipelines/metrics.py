@@ -40,6 +40,17 @@ def classification_metrics(
     }
 
 
+def fpr_gap(y_true: np.ndarray, flagged: np.ndarray, groups: pd.DataFrame) -> dict[str, float]:
+    """Largest difference in false-positive rate between groups, in percentage points, per
+    column (spec 03 §6 target: < 2 points). Only legit rows count: FPR is about wrong flags."""
+    legit = np.asarray(y_true) == 0
+    out = {}
+    for col in groups.columns:
+        rates = pd.Series(np.asarray(flagged)[legit]).groupby(groups[col].to_numpy()[legit]).mean()
+        out[col] = float((rates.max() - rates.min()) * 100) if len(rates) > 1 else 0.0
+    return out
+
+
 def scenario_recall(scenario: pd.Series, flagged: np.ndarray) -> dict[str, float]:
     """Share of each fraud scenario's rows that the threshold catches (spec target: each >= 80%)."""
     frame = pd.DataFrame({"scenario": scenario.to_numpy(), "flagged": flagged})

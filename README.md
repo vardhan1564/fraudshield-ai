@@ -138,6 +138,12 @@ python -m ml.pipelines.train --dataset ieee        # ~15 min, needs ~2 GB free R
 Settings are in `ml/pipelines/config.yaml`. Runs appear in MLflow (http://127.0.0.1:5000) under the
 `txn_model` experiment; add `--no-mlflow` to just print the metrics table.
 
+Tuning (Optuna, 30 trials) saves the served model to `ml/artifacts/txn_model.json` (+ `.meta.json`),
+logs a SHAP summary plot to MLflow and rewrites `ml/models/txn_model/MODEL_CARD.md`:
+```powershell
+python -m ml.pipelines.tune --dataset simulated --trials 30   # ~2 min
+```
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

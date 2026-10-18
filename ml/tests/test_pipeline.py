@@ -1,10 +1,13 @@
 """Training pipeline: time split, metrics on hand-computed scores, and an end-to-end run."""
 
+import json
 from pathlib import Path
 
 import numpy as np
+import optuna
 import pandas as pd
 import pytest
+import xgboost as xgb
 import yaml
 
 from ml.features.build import training_frame
@@ -12,13 +15,15 @@ from ml.features.schema import FEATURE_NAMES
 from ml.pipelines.datasets import from_training_frame, load_ieee
 from ml.pipelines.metrics import (
     classification_metrics,
+    fpr_gap,
     recall_at_fpr,
     scenario_recall,
     threshold_for_fpr,
 )
 from ml.pipelines.split import time_split
-from ml.pipelines.train import format_table, train_model
+from ml.pipelines.train import Prepared, TrainResult, fit, format_table, prepare, train_model
 from ml.pipelines.train import main as train_main
+from ml.pipelines.tune import build_meta, model_card, save_model, shap_summary, shap_values, tune
 from ml.simulator.config import load_config
 from ml.simulator.run import simulate
 from ml.simulator.schema import SCENARIOS
@@ -180,3 +185,91 @@ def test_train_cli_without_mlflow(frame: pd.DataFrame, tmp_path: Path) -> None:
     config = tmp_path / "config.yaml"
     config.write_text(yaml.safe_dump(cfg), encoding="utf-8")
     assert train_main(["--config", str(config), "--no-mlflow"]) == 0
+
+
+# --- fairness ----------------------------------------------------------------------------------
+
+
+def test_fpr_gap_by_hand() -> None:
+    y = np.array([0, 0, 0, 0, 0, 0, 1, 1])
+    flagged = np.array([True, False, False, False, False, False, True, False])
+    groups = pd.DataFrame({"city_tier": [1, 1, 2, 2, 3, 3, 1, 2], "age_band": ["a"] * 8})
+    gap = fpr_gap(y, flagged, groups)
+    # Legit rows: tier 1 FPR 1/2, tiers 2 and 3 FPR 0 -> 50 points; one age band -> 0.
+    assert gap == {"city_tier": pytest.approx(50.0), "age_band": 0.0}
+
+
+# --- tuning, saving, SHAP, model card ----------------------------------------------------------
+
+
+@pytest.fixture(scope="module")
+def tuned(frame: pd.DataFrame) -> tuple[Prepared, optuna.Study, TrainResult]:
+    groups = pd.DataFrame(
+        {"city_tier": np.arange(len(frame)) % 3 + 1, "age_band": "26-35"}, index=frame.index
+    )
+    prep = prepare(from_training_frame(frame, warmup_days=14, groups=groups), FAST_CFG)
+    study = tune(prep, FAST_CFG, n_trials=3)
+    return prep, study, fit(prep, FAST_CFG, tuned=study.best_params)
+
+
+def test_tune_searches_the_space(tuned: tuple[Prepared, optuna.Study, TrainResult]) -> None:
+    _, study, result = tuned
+    assert len(study.trials) == 3
+    best = study.best_params
+    assert 0.01 <= best["eta"] <= 0.3 and 3 <= best["max_depth"] <= 10
+    assert result.params["eta"] == best["eta"]  # the refit used the tuned values
+    assert 0 < study.best_value <= 1
+    assert set(result.fairness) == {"city_tier", "age_band"}
+
+
+def test_saved_model_loads_and_predicts_the_same(
+    tuned: tuple[Prepared, optuna.Study, TrainResult], tmp_path: Path
+) -> None:
+    prep, study, result = tuned
+    path = tmp_path / "txn_model.json"
+    meta_path = save_model(result, path, build_meta(result, study, "test"))
+    loaded = xgb.Booster(model_file=str(path))
+    sample = xgb.DMatrix(prep.shap_sample, enable_categorical=True)
+    expected = result.booster.predict(
+        sample, iteration_range=(0, result.params["best_iteration"] + 1)
+    )
+    np.testing.assert_allclose(loaded.predict(sample), expected, rtol=1e-6)
+    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    assert meta["threshold"] == result.threshold
+    assert [f["name"] for f in meta["features"]["features"]] == FEATURE_NAMES
+
+
+def test_shap_values_add_up_to_the_score(tuned: tuple[Prepared, optuna.Study, TrainResult]) -> None:
+    prep, _, result = tuned
+    sample = prep.shap_sample.head(200)
+    contribs = shap_values(result, sample)
+    assert contribs.shape == (200, len(FEATURE_NAMES) + 1)  # + bias column
+    margin = result.booster.predict(
+        xgb.DMatrix(sample, enable_categorical=True),
+        output_margin=True,
+        iteration_range=(0, result.params["best_iteration"] + 1),
+    )
+    np.testing.assert_allclose(contribs.sum(axis=1), margin, rtol=1e-4, atol=1e-4)
+
+
+def test_shap_plot_and_model_card(
+    tuned: tuple[Prepared, optuna.Study, TrainResult], tmp_path: Path
+) -> None:
+    prep, study, result = tuned
+    png = tmp_path / "shap.png"
+    importance = shap_summary(result, prep.shap_sample.head(300), png)
+    assert png.stat().st_size > 10_000 and importance.index[0] in FEATURE_NAMES
+    card = model_card(result, study, importance, "test", None, None)
+    for section in (
+        "## Purpose",
+        "## Training data",
+        "## Features",
+        "## Metrics",
+        "## Thresholds",
+        "## Limitations",
+        "## Fairness results",
+        "## Version",
+        "## Date",
+    ):
+        assert section in card, section
+    assert f"{result.metrics['test']['pr_auc']:.4f}" in card

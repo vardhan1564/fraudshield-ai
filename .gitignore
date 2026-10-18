@@ -19,6 +19,9 @@ ml/data/processed/
 ml/data/simulated/
 ml/artifacts/*.pkl
 ml/artifacts/*.pt
+ml/artifacts/*_optuna_trials.csv
+ml/artifacts/*_shap_summary.png
+ml/artifacts/txn_model_ieee.*
 mlruns/
 *.parquet
 
