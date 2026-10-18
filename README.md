@@ -130,6 +130,14 @@ python -m ml.features.build    # ml/data/simulated -> ml/data/features/simulated
 Feature names and types live in `ml/features/schema.py`; after changing it, run
 `python -m ml.features.schema` to regenerate `ml/features/features.json`.
 
+### Training (MLflow must be running: see Local infrastructure)
+```powershell
+python -m ml.pipelines.train --dataset simulated   # ~10 s
+python -m ml.pipelines.train --dataset ieee        # ~15 min, needs ~2 GB free RAM
+```
+Settings are in `ml/pipelines/config.yaml`. Runs appear in MLflow (http://127.0.0.1:5000) under the
+`txn_model` experiment; add `--no-mlflow` to just print the metrics table.
+
 ## Everyday commands (repo root, venv active)
 | Task | Command |
 |---|---|

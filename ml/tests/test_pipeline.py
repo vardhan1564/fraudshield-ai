@@ -161,7 +161,7 @@ def test_train_end_to_end_on_simulated(frame: pd.DataFrame) -> None:
     assert result.params["scale_pos_weight"] > 1
     assert sum(result.sizes.values()) == len(ds.y)
     assert len(result.data_hash) == 16
-    assert "PR-AUC" in format_table(ds, result)
+    assert "PR-AUC" in format_table(result)
 
 
 def test_train_is_deterministic(frame: pd.DataFrame) -> None:

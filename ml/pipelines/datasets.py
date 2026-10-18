@@ -4,6 +4,7 @@ IEEE-CIS keeps its own ~430 columns (it has none of our UPI signals); it shows t
 real fraud data (Gate A). The model the API serves is trained on the simulated spec features.
 """
 
+import warnings
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -78,8 +79,10 @@ def load_ieee(raw_dir: Path, max_rows: int | None = None) -> Dataset:
     # whole ~1 GB table, which does not fit next to it on an 8 GB laptop.
     idn = _read_ieee_csv(raw_dir / "train_identity.csv").set_index("TransactionID")
     idn = idn.reindex(txn["TransactionID"])
-    for col in idn.columns:
-        txn[col] = idn[col].to_numpy() if idn[col].dtype != "category" else idn[col].array
+    with warnings.catch_warnings():  # many single-column inserts are intended (no full copy)
+        warnings.simplefilter("ignore", pd.errors.PerformanceWarning)
+        for col in idn.columns:
+            txn[col] = idn[col].to_numpy() if idn[col].dtype != "category" else idn[col].array
     del idn
 
     features = [c for c in txn.columns if c not in IEEE_ID_COLS]  # not the id, label or clock
