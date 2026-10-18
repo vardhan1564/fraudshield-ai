@@ -87,6 +87,8 @@ def test_scenario_recall() -> None:
     scenario = pd.Series(["a", "a", "b", None, None])
     flagged = np.array([True, False, True, True, False])
     assert scenario_recall(scenario, flagged) == {"a": 0.5, "b": 1.0}
+    with_missing = scenario_recall(scenario, flagged, expected=["a", "c"])
+    assert with_missing["a"] == 0.5 and np.isnan(with_missing["c"]) and with_missing["b"] == 1.0
 
 
 # --- datasets ----------------------------------------------------------------------------------

@@ -51,8 +51,14 @@ def fpr_gap(y_true: np.ndarray, flagged: np.ndarray, groups: pd.DataFrame) -> di
     return out
 
 
-def scenario_recall(scenario: pd.Series, flagged: np.ndarray) -> dict[str, float]:
-    """Share of each fraud scenario's rows that the threshold catches (spec target: each >= 80%)."""
+def scenario_recall(
+    scenario: pd.Series, flagged: np.ndarray, expected: list[str] | None = None
+) -> dict[str, float]:
+    """Share of each fraud scenario's rows that the threshold catches (spec target: each >= 80%).
+
+    Scenarios in `expected` with no rows here are reported as NaN rather than left out.
+    """
     frame = pd.DataFrame({"scenario": scenario.to_numpy(), "flagged": flagged})
     fraud = frame[frame["scenario"].notna()]
-    return {str(k): float(v) for k, v in fraud.groupby("scenario")["flagged"].mean().items()}
+    out = {str(k): float(v) for k, v in fraud.groupby("scenario")["flagged"].mean().items()}
+    return {**dict.fromkeys(expected or [], float("nan")), **out}

@@ -40,3 +40,22 @@ anomaly:
     batch_size: 512
     lr: 0.001
   mlflow_experiment: anomaly_model
+
+# Social-engineering model (T2.4): LightGBM on context, payee, coach and amount-ratio features.
+social:
+  scenarios: [digital_arrest, fake_support_refund, investment_task] # target = 1
+  step_up_fpr: 0.05 # STEP_UP range: first-pass score above the 5%-FPR threshold (spec 03 section 5)
+  coach_share: 0.5 # share of STEP_UP-range training rows that get simulated coach answers
+  coach_questions: [2, 3] # spec 01 F1: 2-3 yes/no questions
+  coach_yes: { scam: 0.6, other_fraud: 0.05, legit: 0.03 } # chance of a red-flag YES per question
+  lightgbm:
+    num_boost_round: 2000
+    early_stopping_rounds: 100
+    params:
+      learning_rate: 0.05
+      num_leaves: 31
+      min_data_in_leaf: 50
+      feature_fraction: 0.9
+      bagging_fraction: 0.8
+      bagging_freq: 1
+  mlflow_experiment: social_model
