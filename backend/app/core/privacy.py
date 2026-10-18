@@ -1,4 +1,4 @@
-"""PII masking for logs and API responses (CLAUDE.md rule 8, spec 08)."""
+"""PII masking for logs and API responses (spec 08 security checklist)."""
 
 
 def mask_phone(value: str | None) -> str | None:
