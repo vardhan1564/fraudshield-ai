@@ -99,18 +99,24 @@ Indexes: transactions(user_id, ts desc), transactions(payee_id, ts desc), alerts
 ## 2. Redis keys
 | Key | Type | TTL | Content |
 |---|---|---|---|
-| `vel:{user_id}:5m` / `:1h` / `:24h` | hash {count, sum} | window | velocity |
-| `fail:{user_id}:1h` | int | 1 h | failed attempts |
-| `payees:{user_id}` | set | 90 d | known payees |
-| `payee:{vpa}:senders:24h` | set | 24 h | distinct senders |
-| `profile:{user_id}` | hash | 24 h | avg amount, usual hours, home geo |
+| `vel:{user_id}` | sorted set | 30 d | the user's attempts: member `{txn_id}\|{amount}\|{status}`, score = epoch second (velocity, failed count, 30-day average) |
+| `payees:{user_id}` | hash | 90 d | payee VPA → first successful payment (epoch s) |
+| `payee:{vpa}:senders` | sorted set | 24 h | member `{user_id}\|{txn_id}`, score = epoch second (distinct senders) |
+| `profile:{user_id}` | hash | none (refreshed by sync) | home_lat, home_lon, sim_changed_at (epoch s) |
+| `device:{device_id}` | hash | none | first_seen (epoch s), is_rooted (0/1) |
 | `graph:{account_id}` | hash | 10 min | graph_score, degree, pagerank, hops_to_fraud, community_ratio |
-| `rep:{vpa}` | hash | 10 min | reputation_score, report_count |
+| `rep:{vpa}` | hash | 10 min | reputation_score, report_count, account_age_days |
 | `rl:{api_key}` | int | 1 s | rate limit |
 | `rl:login:{ip}` | int | 60 s | login attempts this minute (T3.2) |
 | `refresh:{jti}` | string | refresh lifetime (7 d) | user id; deleted when the refresh token is used (rotation, T3.2) |
 
 Use Redis pipelines; one round trip per request.
+
+_Changed in T3.3:_ the velocity keys were fixed-TTL buckets (`vel:{user_id}:5m/:1h/:24h` hashes,
+`fail:{user_id}:1h`, a `payees` set, a `senders:24h` set). Buckets only approximate a sliding window,
+so online features could not equal the offline ones (T3.3 parity, tolerance 1e-6). Sorted sets of
+timestamped events give exact open windows (`ZRANGEBYSCORE (t-w (t`), and the code lives in
+`backend/app/services/features.py`.
 
 Redis Streams and pub/sub channels are listed in `docs/specs/02-architecture.md` §4 and §6.
 

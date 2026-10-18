@@ -45,6 +45,11 @@ warn_unreachable = true
 module = ["xgboost.*", "lightgbm.*", "shap.*", "sklearn.*", "networkx.*", "torch_geometric.*", "mlflow.*", "evidently.*"]
 ignore_missing_imports = true
 
+[[tool.mypy.overrides]]
+# Shared ML code imported by the API: used, not strict-checked here (ml/ has its own tests).
+module = ["ml.*"]
+follow_imports = "silent"
+
 [tool.pytest.ini_options]
 testpaths = ["backend/tests", "ml/tests"]
 # Repo root makes `import ml` work; backend/ makes `import app` work.
