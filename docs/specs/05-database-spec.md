@@ -134,3 +134,12 @@ Computed per account each refresh: degree, PageRank, hops to nearest confirmed-f
 
 ## 4. Seed data
 `scripts/seed.py` creates: 1 admin, 2 analysts, 20 customers with trusted contacts, 50 payees (5 reported), 5 rules. Credentials printed once; stored in `scripts/seed_credentials.local.txt` (git-ignored).
+
+## 5. Implementation notes (T3.1)
+- Models: `backend/app/models/` (`core.py`, `operations.py`, `graph.py`); migration `backend/alembic/versions/*_initial_schema.py`.
+- Nullability the table above leaves open: the customer profile columns of `users` (`city`, `city_tier`, `age_band`, `kyc_level`, `avg_txn_amount`) and `external_id` are null for staff; scoring columns of `transactions` are null until scored; `cases.resolved_by` is null until resolved.
+- Added constraints: unique `(user_id, contact_user_id)` on `trusted_contacts`, unique `rules.name`, unique `(name, version)` on `model_versions`, partial index on unsent `outbox` rows, defaults `currency = 'INR'` and `rules.priority = 100`.
+- `transactions(user_id, ts desc)` and `(payee_id, ts desc)` also serve as the `user_id` / `payee_id` indexes.
+- `audit_log` is append-only via a trigger that rejects UPDATE and DELETE.
+- Postgres enum type names: `user_role`, `user_language`, `txn_channel`, `txn_decision`, `rule_action`, `alert_severity`, `alert_status`, `case_label`, `approval_status`, `edge_type`, `ring_status`.
+- Tests run against a separate `<db>_test` database, never the dev data.

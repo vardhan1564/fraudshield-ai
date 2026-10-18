@@ -46,3 +46,6 @@ Thumbs.db
 .coverage.*
 coverage.xml
 htmlcov/
+
+# Seed logins (printed once by scripts/seed.py)
+scripts/seed_credentials.local.txt
