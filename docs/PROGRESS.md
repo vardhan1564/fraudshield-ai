@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P3 Backend
-- **Next task:** T3.7 Alerts, cases, WebSockets (B)
+- **Next task:** T3.8 Remaining business APIs (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none (close Chrome before IEEE runs: the laptop is short of memory)
 
@@ -44,7 +44,7 @@
 - [x] T3.4 Model runtime + scoring endpoint · A
 - [x] T3.5 Explanations · A
 - [x] T3.6 Worker: Redis Streams + jobs · A
-- [ ] T3.7 Alerts, cases, WebSockets · B
+- [x] T3.7 Alerts, cases, WebSockets · B
 - [ ] T3.8 Remaining business APIs · B
 - [ ] T3.9 Load test (Gate B) · B
 
@@ -90,6 +90,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-19 · B · T3.7 done: GET /alerts (open+assigned, severity then oldest, paged), GET/PATCH /cases/{id} (status on the alert, label+notes on the case, assign, closing needs a label; audit row with changed fields; new label -> stream:cases.labeled via bus.publish in the same transaction; case.updated pushed after commit). /api/v1/ws/alerts and /ws/customer relay Redis pub/sub (subscribe before accept, 1008 on bad token/role, close at token expiry). Worker now creates the case with the alert; alert.created has case_id. services/audit.py record() used by case updates and auth register/login/login_failed (spec 08). Tests: starlette TestClient with the real worker on the app loop: HOLD -> alert.created on /ws/alerts < 1 s, LLM sentence on /ws/customer, customers only get their own channel; backend 150 pass. Follow-up: rule changes / model deploys get audit rows when T4.7/T5.8 add them · next T3.8
 - 2026-10-19 · A · T3.6 done: `python -m app.streaming.worker` runs alert_pusher (HOLD -> alert row + alert.created on ws:analysts), llm_explainer (Claude -> Ollama -> template sentence saved to model_scores + explanation.ready on ws:user:{id} and ws:analysts) and graph_edges (SENT/USED_DEVICE/LOGGED_FROM rows), each in its own consumer group (spec 02 said one shared group, which would split events: spec edited). 3 tries then stream:dead; own pending drained on start, XAUTOCLAIM after 60 s; APScheduler job outbox_replay every 10 s. streaming/bus.py publish() = XADD or outbox row, scoring uses it. services/notify.py pub/sub helpers. New index graph_edges(txn_id) (migration b4daed2e3633). 6 integration tests on docker Redis + test DB incl. the real worker process; backend 139 pass. The /ws endpoints themselves are T3.7 (tests prove the pub/sub message) · next T3.7
 - 2026-10-19 · A · T3.5 done: services/explain.py combines exact TreeSHAP of txn_model + social_model (booster pred_contribs, same algorithm as shap.TreeExplainer) through the meta-model's logistic weights, so impact = share of the meta log-odds (test: sums match the meta-model exactly) and scam signals like screen share now show as reasons; rule hits listed first, 3-5 positive top_reasons, top 10 stored in model_scores.shap_json. Explain step p50 9.9 / p95 12.9 ms (< 15) after a numpy one-row DMatrix with nthread=1 (pandas DMatrix was ~2x slower). reason_map.py: phrase for all 38 features in en/hi/mr (Hindi/Marathi need a native speaker's review). services/llm/: Claude (effort low, no SDK retries) -> Ollama -> template, LLM_TIMEOUT_MS each, never raises; worker calls it in T3.6. Score response uses the customer's language, status pending except APPROVE. GET /transactions/{id}/explain (txn_id or UUID, ?lang=, analyst/admin/owner, 404 for others). Backend 133 tests pass. Specs 01 F4, 04 §2.3, 05 noted. Follow-ups for T3.9: to_frame() (~36 ms under load) is the scoring hot spot; coach questions are English-only (T5.4) · next T3.6
 - 2026-10-19 · A · T3.4 done: POST /api/v1/transactions/score (spec 04 §2.1). ml_runtime/registry.py loads all 5 artifacts once at startup (missing -> 503 MODELS_UNAVAILABLE); services/scoring.py: duplicate check (409) -> online features -> models in a worker thread -> decision -> response with latency_ms; transaction + model_scores saved and stream event published in a background task (outbox row if Redis is down). services/decision.py: thresholds.json (STEP_UP > 0.016, HOLD > 0.25) + reported payee >= 5 -> at least STEP_UP (PRD §8) + admin rules only raise; STEP_UP action = SCAM_COACH on scam signals else OTP. THRESHOLD_APPROVE/HOLD env vars removed (thresholds.json wins). Model-card code moved to ml/pipelines/model_cards.py. Tests: backend 74 + ml 109 pass, ruff + mypy clean. Real p95 check is T3.9 (Gate B) · next T3.5

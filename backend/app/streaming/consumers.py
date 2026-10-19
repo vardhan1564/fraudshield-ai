@@ -13,7 +13,7 @@ from sqlalchemy import delete, select, update
 from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 
 from app.core.config import Settings
-from app.models import Alert, GraphEdge, ModelScore
+from app.models import Alert, Case, GraphEdge, ModelScore
 from app.models.enums import Decision, EdgeType, Language, Severity
 from app.services import notify
 from app.services.llm import ExplainRequest, Provider, explain_sentence
@@ -40,22 +40,34 @@ def severity(risk: float) -> Severity:
 
 
 async def alert_pusher(event: dict[str, Any], deps: Deps) -> None:
-    """HOLD -> one alert row (once per transaction) + `alert.created` to analysts."""
+    """HOLD -> one alert and its case (once per transaction) + `alert.created` to analysts."""
     if event["decision"] != Decision.HOLD.value:
         return
     txn_pk = uuid.UUID(event["id"])
     async with deps.sessionmaker() as session:
-        alert = await session.scalar(select(Alert).where(Alert.txn_id == txn_pk))
+        found = (
+            await session.execute(
+                select(Alert, Case)
+                .outerjoin(Case, Case.alert_id == Alert.id)
+                .where(Alert.txn_id == txn_pk)
+            )
+        ).first()
+        alert, case = found if found is not None else (None, None)
         if alert is None:
             alert = Alert(txn_id=txn_pk, severity=severity(float(event["risk_score"])))
             session.add(alert)
-            await session.commit()
-            await session.refresh(alert)
+            await session.flush()
+        if case is None:  # every alert gets a case for the analyst to work in (T3.7)
+            case = Case(alert_id=alert.id)
+            session.add(case)
+        await session.commit()
+        await session.refresh(alert)
     await notify.to_analysts(
         deps.redis,
         "alert.created",
         {
             "alert_id": str(alert.id),
+            "case_id": str(case.id),
             "txn_id": event["txn_id"],
             "risk_score": event["risk_score"],
             "decision": event["decision"],

@@ -25,6 +25,7 @@ from app.core.security import (
 from app.models import User
 from app.models.enums import Role
 from app.schemas.auth import LoginRequest, RegisterRequest, TokenResponse
+from app.services import audit
 
 LOGIN_WINDOW_S = 60
 
@@ -42,7 +43,11 @@ async def issue_tokens(user: User, redis: Redis, settings: Settings) -> TokenRes
 
 
 async def register(
-    body: RegisterRequest, session: AsyncSession, redis: Redis, settings: Settings
+    body: RegisterRequest,
+    session: AsyncSession,
+    redis: Redis,
+    settings: Settings,
+    client_ip: str | None = None,
 ) -> TokenResponse:
     """Create a customer account and log it in. Staff accounts are made by admins/seed."""
     email_taken = AppError(409, "EMAIL_TAKEN", "An account with this email already exists")
@@ -58,6 +63,16 @@ async def register(
     )
     session.add(user)
     try:
+        await session.flush()  # user.id for the audit row
+        audit.record(
+            session,
+            actor_id=user.id,
+            action="auth.register",
+            entity="user",
+            entity_id=user.id,
+            after={"role": user.role.value, "language": user.language.value},
+            ip=client_ip,
+        )
         await session.commit()
     except IntegrityError as exc:  # same email registered at the same moment
         await session.rollback()
@@ -94,7 +109,13 @@ async def login(
         verify_password, body.password, None if user is None else user.password_hash
     )
     if user is None or not ok:
+        audit.record(session, actor_id=None, action="auth.login_failed", entity="user",
+                     entity_id=None if user is None else user.id, ip=client_ip)  # fmt: skip
+        await session.commit()
         raise unauthorized("Wrong email or password")  # same answer for both: no user probing
+    audit.record(session, actor_id=user.id, action="auth.login", entity="user",
+                 entity_id=user.id, ip=client_ip)  # fmt: skip
+    await session.commit()
     return await issue_tokens(user, redis, settings)
 
 

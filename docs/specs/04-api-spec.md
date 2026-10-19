@@ -107,6 +107,10 @@ _(T3.5)_ `{id}` is the client `txn_id` or the transaction UUID. Optional `?lang=
 ```json
 {"status": "closed", "label": "fraud", "notes": "Confirmed with customer by phone"}
 ```
+
+_(T3.7)_ `{id}` is the case UUID; every alert gets a case when the worker creates it, and `alert.created` carries `case_id`. Fields: `status` (the alert's: open | assigned | closed), `label` (fraud | legit), `notes`, `assigned_to` (an analyst/admin id, `null` unassigns; assigning an open alert makes it `assigned`). `null` for status/label/notes means no change. Closing needs a label (400 `VALIDATION_ERROR`). A new label sets `resolved_by/at`. Each change writes one `audit_log` row (`case.update`, before/after of the changed fields only) and, for a new label, a `stream:cases.labeled` event `{case_id, alert_id, txn_pk, txn_id, label, previous_label, labeled_by, labeled_at, user_id, payee_vpa, amount}` in the same transaction (outbox if Redis is down); then `case.updated` on `/ws/alerts`. Response: the case detail.
+
+`GET /alerts?status=&page=&page_size=` (≤ 200) → page of `{alert_id, case_id, txn_id, severity, status, assigned_to, risk_score, decision, amount, channel, top_reasons, created_at}`; default open + assigned, most severe first, then oldest. `GET /cases/{id}` → `{case_id, alert_id, severity, status, assigned_to, label, notes, resolved_by, resolved_at, created_at, transaction: {id, txn_id, amount, currency, channel, merchant_category, payee_vpa, risk_score, decision, action, model_version, ts, customer: {id, external_id, name, phone (masked)}}, top_reasons, explanation}`. Endpoints 11, 13, 14 are analyst-only, as in the table.
 `status`: open | assigned | closed · `label`: fraud | legit | null. Side effects: audit log, `cases.labeled` event, reputation update if fraud.
 
 ### 2.5 `GET /graph/entity/{id}?depth=2`
@@ -140,6 +144,8 @@ _(T3.5)_ `{id}` is the client `txn_id` or the transaction UUID. Optional `?lang=
 
 ## 3. WebSockets
 Both fed by Redis pub/sub (spec 02 §6) so they work with several API workers.
+
+_(T3.7)_ Paths are under the base URL: `/api/v1/ws/alerts`, `/api/v1/ws/customer`. `?token=` is an access token; a bad token or wrong role (analyst for alerts, customer for customer) closes with **1008**. The server subscribes before accepting, forwards messages unchanged, ignores anything the client sends, and closes with 1008 when the token expires (reconnect with a fresh token).
 
 ### `/ws/alerts` (analyst)
 Auth via `?token=`. Server messages:

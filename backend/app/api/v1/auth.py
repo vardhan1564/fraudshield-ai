@@ -27,10 +27,15 @@ ERRORS: dict[int | str, dict[str, Any]] = {
     responses=ERRORS,
 )  # fmt: skip
 async def register(
-    body: RegisterRequest, session: SessionDep, redis: RedisDep, settings: SettingsDep
+    body: RegisterRequest,
+    request: Request,
+    session: SessionDep,
+    redis: RedisDep,
+    settings: SettingsDep,
 ) -> TokenResponse:
     """Create a customer account and return its tokens (409 EMAIL_TAKEN if the email exists)."""
-    return await service.register(body, session, redis, settings)
+    client_ip = request.client.host if request.client else None
+    return await service.register(body, session, redis, settings, client_ip)
 
 
 @router.post("/login", response_model=TokenResponse, responses=ERRORS)

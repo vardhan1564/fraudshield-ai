@@ -137,8 +137,8 @@ async def test_hold_end_to_end(
     }
     alert_msg = next(m for m in got if m["type"] == "alert.created")["data"]
     assert alert_msg["txn_id"] == body["txn_id"] and alert_msg["alert_id"] == str(alert.id)
-    assert set(alert_msg) == {"alert_id", "txn_id", "risk_score", "decision", "top_reasons",
-                              "created_at"}  # fmt: skip
+    assert set(alert_msg) == {"alert_id", "case_id", "txn_id", "risk_score", "decision",
+                              "top_reasons", "created_at"}  # fmt: skip
     mine = next(m for m in got if m["channel"] == f"ws:user:{customer.id}")["data"]
     assert mine == {"txn_id": body["txn_id"], "explanation": sentence}
 
