@@ -48,8 +48,6 @@ class Settings(BaseSettings):
     # ML
     mlflow_tracking_uri: str = "http://127.0.0.1:5000"
     model_dir: Path = Path("ml/artifacts")
-    threshold_approve: float = Field(default=0.30, ge=0, le=1)
-    threshold_hold: float = Field(default=0.70, ge=0, le=1)
 
     # LLM
     llm_provider: Literal["anthropic", "ollama", "template"] = "anthropic"
@@ -91,8 +89,6 @@ class Settings(BaseSettings):
 
     @model_validator(mode="after")
     def _check_consistency(self) -> "Settings":
-        if self.threshold_approve >= self.threshold_hold:
-            raise ValueError("THRESHOLD_APPROVE must be lower than THRESHOLD_HOLD")
         if self.app_env == "production" and (
             self.secret_key.get_secret_value() == PLACEHOLDER_SECRET
             or len(self.secret_key.get_secret_value()) < 32

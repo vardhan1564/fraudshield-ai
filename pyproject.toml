@@ -42,7 +42,7 @@ warn_unreachable = true
 
 [[tool.mypy.overrides]]
 # ML libraries without type stubs.
-module = ["xgboost.*", "lightgbm.*", "shap.*", "sklearn.*", "networkx.*", "torch_geometric.*", "mlflow.*", "evidently.*"]
+module = ["xgboost.*", "lightgbm.*", "joblib.*", "pandas.*", "shap.*", "sklearn.*", "networkx.*", "torch_geometric.*", "mlflow.*", "evidently.*"]
 ignore_missing_imports = true
 
 [[tool.mypy.overrides]]

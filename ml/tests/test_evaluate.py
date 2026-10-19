@@ -1,8 +1,6 @@
 """Evaluation report: loads every artifact, measures spec 03 §6 metrics, decides Gate A."""
 
-import runpy
 import shutil
-import sys
 from datetime import date
 from pathlib import Path
 
@@ -23,23 +21,6 @@ from ml.pipelines.evaluate import (
     target_rows,
 )
 from ml.tests.conftest import config_for
-
-
-@pytest.fixture(scope="module")
-def served_folder(
-    mini_artifacts: tuple[Path, Dataset], tmp_path_factory: pytest.TempPathFactory
-) -> Path:
-    """A private copy of the mini artifacts plus the meta-model and thresholds.json, built with
-    `python -m` semantics (run as __main__) like the real command, so the pickle loads."""
-    folder = tmp_path_factory.mktemp("served")
-    shutil.copytree(mini_artifacts[0], folder, dirs_exist_ok=True)
-    argv = ["meta_model", "--config", str(config_for(folder)), "--artifacts", str(folder)]
-    with pytest.MonkeyPatch.context() as mp:
-        mp.setattr(sys, "argv", [*argv, "--no-mlflow"])
-        with pytest.raises(SystemExit) as done:
-            runpy.run_module("ml.models.meta_model", run_name="__main__", alter_sys=True)
-    assert done.value.code == 0
-    return folder
 
 
 @pytest.fixture(scope="module")

@@ -30,7 +30,14 @@ from ml.features.schema import FEATURES
 from ml.pipelines.datasets import Dataset
 from ml.pipelines.metrics import classification_metrics, scenario_recall, threshold_for_fpr
 from ml.pipelines.split import time_split
-from ml.pipelines.train import DEFAULT_CONFIG, ROOT, data_hash, load_dataset, mlflow_client
+from ml.pipelines.train import (
+    DEFAULT_CONFIG,
+    ROOT,
+    data_hash,
+    load_dataset,
+    mlflow_client,
+    register_artifact,
+)
 
 ARTIFACT = ROOT / "ml" / "artifacts" / "anomaly_model.pt"
 ANOMALY_GROUPS = ("behaviour", "device", "velocity")
@@ -266,6 +273,20 @@ class AnomalyModel:
         return self.minmax.apply(self.scorer.raw(self.pre.transform(X)))
 
 
+def saved_meta(result: "AnomalyResult") -> dict[str, Any]:
+    """What is stored next to the kept model (read by the model card)."""
+    w = result.winner
+    return {
+        "model": "anomaly_model",
+        "kind": w.model.kind,
+        "features": ANOMALY_FEATURES,
+        "metrics": w.metrics,
+        "scenario_recall": w.recall,
+        "info": w.info,
+        "data_hash": result.data_hash,
+    }
+
+
 def save(model: AnomalyModel, path: Path, meta: dict[str, Any]) -> None:
     path.parent.mkdir(parents=True, exist_ok=True)
     torch.save(
@@ -436,6 +457,7 @@ def log_to_mlflow(result: AnomalyResult, cfg: dict[str, Any], table: str, artifa
         mlflow.log_dict({"features": ANOMALY_FEATURES}, "features.json")
         mlflow.log_text(table, "metrics.txt")
         mlflow.log_artifact(str(artifact))
+        register_artifact("anomaly_model", run.info.run_id, artifact.name)
         return str(run.info.run_id)
 
 
@@ -453,16 +475,7 @@ def main(argv: list[str] | None = None) -> int:
     table = format_table(result)
     print(table)
     w = result.winner
-    meta = {
-        "model": "anomaly_model",
-        "kind": w.model.kind,
-        "features": ANOMALY_FEATURES,
-        "metrics": w.metrics,
-        "scenario_recall": w.recall,
-        "info": w.info,
-        "data_hash": result.data_hash,
-    }
-    save(w.model, args.out, meta)
+    save(w.model, args.out, saved_meta(result))
     print(f"\nsaved {args.out}")
     if not args.no_mlflow:
         run_id = log_to_mlflow(result, cfg, table, args.out)

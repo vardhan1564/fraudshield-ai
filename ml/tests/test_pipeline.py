@@ -20,10 +20,11 @@ from ml.pipelines.metrics import (
     scenario_recall,
     threshold_for_fpr,
 )
+from ml.pipelines.model_cards import txn_card
 from ml.pipelines.split import time_split
 from ml.pipelines.train import Prepared, TrainResult, fit, format_table, prepare, train_model
 from ml.pipelines.train import main as train_main
-from ml.pipelines.tune import build_meta, model_card, save_model, shap_summary, shap_values, tune
+from ml.pipelines.tune import build_meta, save_model, shap_summary, shap_values, tune
 from ml.simulator.config import load_config
 from ml.simulator.run import simulate
 from ml.simulator.schema import SCENARIOS
@@ -262,7 +263,7 @@ def test_shap_plot_and_model_card(
     png = tmp_path / "shap.png"
     importance = shap_summary(result, prep.shap_sample.head(300), png)
     assert png.stat().st_size > 10_000 and importance.index[0] in FEATURE_NAMES
-    card = model_card(result, study, importance, "test", None, None)
+    card = txn_card(build_meta(result, study, "test"), importance, None, "test")
     for section in (
         "## Purpose",
         "## Training data",

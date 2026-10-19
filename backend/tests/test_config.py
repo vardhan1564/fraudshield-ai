@@ -24,11 +24,6 @@ def test_cors_origins_split_on_commas() -> None:
     assert settings.cors_origins == ["http://a.test", "http://b.test"]
 
 
-def test_thresholds_must_be_ordered() -> None:
-    with pytest.raises(ValidationError, match="THRESHOLD_APPROVE"):
-        Settings(_env_file=None, threshold_approve=0.8, threshold_hold=0.7)
-
-
 def test_production_rejects_placeholder_secret() -> None:
     with pytest.raises(ValidationError, match="SECRET_KEY"):
         Settings(_env_file=None, app_env="production")

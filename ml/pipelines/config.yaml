@@ -19,7 +19,7 @@ datasets:
     engineered: true # card-uid history features (ml/features/ieee.py)
 
 xgboost:
-  num_boost_round: 2000
+  num_boost_round: 5000 # a ceiling: early stopping ends simulated runs near 60 rounds; IEEE was still improving at 2000
   early_stopping_rounds: 100 # on validation PR-AUC
   params:
     eta: 0.05

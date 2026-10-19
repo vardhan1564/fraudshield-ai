@@ -28,7 +28,14 @@ from ml.features.schema import FEATURES
 from ml.pipelines.datasets import Dataset
 from ml.pipelines.metrics import classification_metrics, scenario_recall, threshold_for_fpr
 from ml.pipelines.split import time_split
-from ml.pipelines.train import DEFAULT_CONFIG, ROOT, data_hash, load_dataset, mlflow_client
+from ml.pipelines.train import (
+    DEFAULT_CONFIG,
+    ROOT,
+    data_hash,
+    load_dataset,
+    mlflow_client,
+    register_artifact,
+)
 
 ARTIFACT = ROOT / "ml" / "artifacts" / "social_model.txt"
 SOCIAL_FEATURES = [f.name for f in FEATURES if f.group in ("context", "payee", "coach")] + [
@@ -266,6 +273,7 @@ def log_to_mlflow(result: SocialResult, cfg: dict[str, Any], table: str, files: 
         mlflow.log_text(table, "metrics.txt")
         for f in files:
             mlflow.log_artifact(str(f))
+        register_artifact("social_model", run.info.run_id, files[0].name)
         return str(run.info.run_id)
 
 

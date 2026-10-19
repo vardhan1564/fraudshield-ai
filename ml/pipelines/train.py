@@ -237,6 +237,24 @@ def mlflow_client(experiment: str) -> Any:
     return mlflow
 
 
+def register_artifact(name: str, run_id: str, artifact: str) -> str:
+    """Add a run's artifact file to the MLflow model registry as `name` (spec 03 §1).
+    Idempotent: a run that is already registered returns its existing version."""
+    from mlflow import MlflowClient
+    from mlflow.exceptions import MlflowException
+
+    client = MlflowClient()
+    try:
+        client.get_registered_model(name)
+    except MlflowException:  # first version of this model
+        client.create_registered_model(name, description=f"FraudShield {name} (spec 03 §1)")
+    for v in client.search_model_versions(f"name = '{name}'"):
+        if v.run_id == run_id:
+            return str(v.version)
+    source = f"{client.get_run(run_id).info.artifact_uri}/{artifact}"
+    return str(client.create_model_version(name, source=source, run_id=run_id).version)
+
+
 def log_to_mlflow(
     result: TrainResult,
     cfg: dict[str, Any],

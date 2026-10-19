@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P3 Backend
-- **Next task:** T3.4 Model runtime + scoring endpoint (A)
+- **Next task:** T3.5 Explanations (A)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none (close Chrome before IEEE runs: the laptop is short of memory)
 
@@ -41,7 +41,7 @@
 - [x] T3.1 DB models, migrations, seed · B
 - [x] T3.2 Auth & roles · B
 - [x] T3.3 Online feature service · A
-- [ ] T3.4 Model runtime + scoring endpoint · A
+- [x] T3.4 Model runtime + scoring endpoint · A
 - [ ] T3.5 Explanations · A
 - [ ] T3.6 Worker: Redis Streams + jobs · A
 - [ ] T3.7 Alerts, cases, WebSockets · B
@@ -90,6 +90,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-19 · A · T3.4 done: POST /api/v1/transactions/score (spec 04 §2.1). ml_runtime/registry.py loads all 5 artifacts once at startup (missing -> 503 MODELS_UNAVAILABLE); services/scoring.py: duplicate check (409) -> online features -> models in a worker thread -> decision -> response with latency_ms; transaction + model_scores saved and stream event published in a background task (outbox row if Redis is down). services/decision.py: thresholds.json (STEP_UP > 0.016, HOLD > 0.25) + reported payee >= 5 -> at least STEP_UP (PRD §8) + admin rules only raise; STEP_UP action = SCAM_COACH on scam signals else OTP. THRESHOLD_APPROVE/HOLD env vars removed (thresholds.json wins). Model-card code moved to ml/pipelines/model_cards.py. Tests: backend 74 + ml 109 pass, ruff + mypy clean. Real p95 check is T3.9 (Gate B) · next T3.5
 - 2026-10-18 · A · T3.3 done: backend/app/services/features.py builds all 38 features for one payment from Redis in one pipeline (sorted-set event windows, open ends like ml/features/windows.py) + record() after scoring + put_profile/put_device/add_report. Parity test replays 4,000 simulated payments (all 38 features, 1e-6): 0 mismatches; a mutant (7-day history) gives 2,950, so the test bites. Spec 05 §2 Redis keys changed from TTL buckets to sorted sets (exact windows). Backend now imports ml/ (repo root on sys.path in app/__init__.py). Follow-ups: rep:{vpa} has a 10-min TTL in spec but holds report_count: fill it from payees in T5.5; is_vpn and payee age are not in the spec 04 request yet (T3.4) · next T3.4
 - 2026-10-18 · A · T2.6 done, Gate A PASS (re-based, decision log): IEEE txn_model with card-uid history features + V-column reduction (339 -> ~140 V cols, chosen on the train period; 258 features) + chunked QuantileDMatrix + Parquet cache + no-copy loader: test PR-AUC 0.470 -> 0.503, ROC-AUC 0.868 -> 0.874, recall@1%FPR 39.3% -> 43.0% (best iteration 1998/2000: more rounds may still help). Served risk_score passes every spec 03 §6 target; latency p95 22.6 ms after warm-up (earlier 30.1 / 133 ms were cold and paging outliers; txn_model now uses inplace_predict) · next T3.3
 - 2026-10-18 · B · T3.2 done: /auth register (customer only, 409 EMAIL_TAKEN), login (same 401 for wrong email/password, bcrypt in a thread), refresh with rotation (refresh:{jti} in Redis, GETDEL: each token works once), me (masked phone). JWT HS256 30 min / 7 d with jti; require_role + require_principal (partner X-API-Key from PARTNER_API_KEYS, constant-time) in app/api/deps.py; login limit 10/min/IP -> 429 + Retry-After. 13 tests (success, wrong password, expired/forged/wrong-type token, 403 wrong role, refresh reuse, rate limit, partner key); spec 04 §2.9 + spec 05 Redis keys · next T3.3

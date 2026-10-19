@@ -40,7 +40,14 @@ from ml.models import anomaly_model, social_model
 from ml.pipelines.datasets import Dataset
 from ml.pipelines.metrics import classification_metrics, fpr_gap, threshold_for_fpr
 from ml.pipelines.split import Split, time_split
-from ml.pipelines.train import DEFAULT_CONFIG, ROOT, data_hash, load_dataset, mlflow_client
+from ml.pipelines.train import (
+    DEFAULT_CONFIG,
+    ROOT,
+    data_hash,
+    load_dataset,
+    mlflow_client,
+    register_artifact,
+)
 
 ARTIFACTS = ROOT / "ml" / "artifacts"
 SCORE_COLUMNS = ["txn_score", "anomaly_score", "social_eng_score", "graph_score"]
@@ -414,6 +421,7 @@ def main(argv: list[str] | None = None) -> int:
             mlflow.log_text(table, "metrics.txt")
             for path in (model_path, thresholds_path, metrics_path):
                 mlflow.log_artifact(str(path))
+            register_artifact("meta_model", run.info.run_id, model_path.name)
             print(
                 f"MLflow run {run.info.run_id} in experiment '{cfg['meta']['mlflow_experiment']}'"
             )
