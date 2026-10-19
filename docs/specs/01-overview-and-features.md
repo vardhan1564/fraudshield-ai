@@ -60,6 +60,7 @@ The PRD (`docs/PRD.md`) holds the why; this file holds the how.
 - Top 3–5 positive contributions → `top_reasons`.
 - LLM turns reasons into one sentence; prompt template in `backend/app/services/llm/prompts.py`; timeout 1.5 s; fallback template "Flagged because: {r1}, {r2}, {r3}."
 - Languages: `en`, `hi`, `mr` (from user profile).
+- _(T3.5)_ SHAP covers txn_model **and** social_model, so scam signals (unknown call, screen share) show up as reasons. Both are tree models: exact TreeSHAP comes from the boosters (`pred_contribs` / `pred_contrib`, the same algorithm as `shap.TreeExplainer`, about 10 ms for both). They are combined with the meta-model's logistic weights (`coef / scale`), so each `impact` is that feature's share of the meta-model log-odds. Rule hits (F2 unknown call + new payee, reported payee ≥ 5) are listed first. The template sentence is worded per decision ("We paused this payment. Flagged because: r1, r2, r3. …"); APPROVE says "This payment looks normal." and is `ready` straight away.
 
 ---
 

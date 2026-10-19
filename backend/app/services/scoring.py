@@ -1,9 +1,10 @@
 """POST /transactions/score: the synchronous scoring path (spec 02 §3, budget < 100 ms p95).
 
 In the request: duplicate check -> online features (one Redis round trip) -> models (worker
-thread) -> decision -> response. After the response (background task): update the Redis
-feature state, save transaction + model_scores to Postgres, publish to
-stream:transactions.scored (outbox row if Redis is down).
+thread) -> decision -> SHAP reasons + template sentence in the customer's language -> response
+(explanation_status "pending": the worker's LLM sentence follows over WebSocket). After the
+response (background task): update the Redis feature state, save transaction + model_scores to
+Postgres, publish to stream:transactions.scored (outbox row if Redis is down).
 """
 
 import asyncio
@@ -11,6 +12,7 @@ import json
 import logging
 import time
 import uuid
+from dataclasses import dataclass
 from datetime import UTC, datetime
 from decimal import Decimal
 from typing import Any
@@ -26,20 +28,14 @@ from app.core.errors import AppError
 from app.ml_runtime.registry import ModelOutput, ModelRegistry
 from app.models import Device, ModelScore, Outbox, Payee, Transaction, User
 from app.models.enums import Decision, Role
-from app.schemas.transactions import (
-    CoachQuestion,
-    ModelScores,
-    Reason,
-    ScoreRequest,
-    ScoreResponse,
-)
-from app.services.decision import QUESTIONS, ActiveRule, Outcome, decide
+from app.schemas.transactions import CoachQuestion, ModelScores, ScoreRequest, ScoreResponse
+from app.services import explain
+from app.services.decision import QUESTIONS, ActiveRule, decide
 from app.services.features import PaymentIn, build_features, record
 
 logger = logging.getLogger(__name__)
 
 SEEN_TTL_S = 7 * 86_400  # duplicate txn_id window (409 DUPLICATE_TXN)
-TOP_REASONS = 3
 STREAM_MAXLEN = 100_000
 
 
@@ -90,34 +86,12 @@ def to_payment(body: ScoreRequest) -> PaymentIn:
     )
 
 
-def top_reasons(out: ModelOutput, features: dict[str, Any], boost: float) -> list[Reason]:
-    """Features pushing towards fraud, largest first (txn_model TreeSHAP, log-odds), plus the
-    F2 rule when it fired. T3.5 replaces the text with plain-language phrases."""
-    reasons: list[Reason] = []
-    if out.rule_hits:
-        reasons.append(Reason(feature="ctx_unknown_call", value=True, impact=round(boost, 3),
-                              text="You are on a call with an unknown number"))  # fmt: skip
-    positive = sorted(
-        ((f, v) for f, v in out.contributions.items() if v > 0 and f != "ctx_unknown_call"),
-        key=lambda fv: -fv[1],
-    )
-    for name, impact in positive[: TOP_REASONS - len(reasons)]:
-        value = features[name]
-        reasons.append(Reason(feature=name, value=value, impact=round(impact, 3),
-                              text=f"{name.replace('_', ' ')}: {value}"))  # fmt: skip
-    return reasons
+@dataclass(frozen=True)
+class Scored:
+    """What the background task needs besides the response."""
 
-
-def template_sentence(outcome: Outcome, reasons: list[Reason]) -> str:
-    """Instant explanation; the worker's LLM sentence replaces it later (T3.5/T3.6)."""
-    first = reasons[0].text.lower() if reasons else "unusual activity"
-    if outcome.decision == Decision.HOLD:
-        return f"We paused this payment because it looks risky ({first}). An analyst will check it."
-    if outcome.action == "SCAM_COACH":
-        return f"Before you pay, please answer a few quick questions ({first})."
-    if outcome.decision == Decision.STEP_UP:
-        return "Please confirm this payment with the OTP we sent you."
-    return "This payment looks normal."
+    out: ModelOutput
+    shap_top: list[dict[str, Any]]  # explain.ranked(): stored in model_scores.shap_json
 
 
 async def score(
@@ -127,7 +101,7 @@ async def score(
     redis: Redis,
     registry: ModelRegistry | None,
     rules: list[ActiveRule],
-) -> tuple[ScoreResponse, User, ModelOutput]:
+) -> tuple[ScoreResponse, User, Scored]:
     started = time.perf_counter()
     if registry is None:
         raise model_unavailable()
@@ -150,7 +124,10 @@ async def score(
         out.risk_score, registry.step_up, registry.hold, features,
         out.scores["social_eng_score"], rules,
     )  # fmt: skip
-    reasons = top_reasons(out, features, registry.boost)
+    stored = explain.ranked(
+        out.contributions, features, [*out.rule_hits, *outcome.rule_hits], registry.boost
+    )
+    reasons = explain.top_reasons(stored, user.language)
     response = ScoreResponse(
         txn_id=body.txn_id,
         risk_score=round(out.risk_score, 4),
@@ -163,7 +140,9 @@ async def score(
             social_eng=round(out.scores["social_eng_score"], 4),
         ),
         top_reasons=reasons,
-        explanation=template_sentence(outcome, reasons),
+        explanation=explain.template_sentence(
+            outcome.decision, outcome.action, [r.text for r in reasons], user.language
+        ),
         explanation_status="ready" if outcome.decision == Decision.APPROVE else "pending",
         coach_questions=[
             CoachQuestion(key=k, text=QUESTIONS[k][0]) for k in outcome.coach_questions
@@ -173,14 +152,14 @@ async def score(
         latency_ms=0,
     )
     response.latency_ms = int((time.perf_counter() - started) * 1000)
-    return response, user, out
+    return response, user, Scored(out, stored)
 
 
 async def after_response(
     body: ScoreRequest,
     response: ScoreResponse,
-    user_id: uuid.UUID,
-    out: ModelOutput,
+    user: User,
+    scored: Scored,
     sessionmaker: async_sessionmaker[AsyncSession],
     redis: Redis,
     settings: Settings,
@@ -194,7 +173,8 @@ async def after_response(
         logger.exception("feature state update failed", extra={"txn_id": body.txn_id})
     event = {
         "txn_id": response.txn_id,
-        "user_id": str(user_id),
+        "user_id": str(user.id),
+        "language": user.language.value,
         "risk_score": response.risk_score,
         "decision": response.decision.value,
         "action": response.action,
@@ -205,7 +185,7 @@ async def after_response(
     }
     try:
         async with sessionmaker() as session:
-            txn_uuid = await _save(session, body, response, user_id, out)
+            txn_uuid = await _save(session, body, response, user, scored)
             event["id"] = str(txn_uuid)
             try:
                 await redis.xadd(
@@ -225,9 +205,10 @@ async def _save(
     session: AsyncSession,
     body: ScoreRequest,
     response: ScoreResponse,
-    user_id: uuid.UUID,
-    out: ModelOutput,
+    user: User,
+    scored: Scored,
 ) -> uuid.UUID:
+    user_id = user.id
     vpa = body.payee_vpa.lower()
     payee = await session.scalar(select(Payee).where(Payee.vpa_or_account == vpa))
     if payee is None:
@@ -278,13 +259,10 @@ async def _save(
             anomaly_score=scores.anomaly,
             graph_score=scores.graph,
             social_eng_score=scores.social_eng,
-            meta_score=out.meta_score,  # before the F2 rule; risk_score is on the txn
-            shap_json={
-                "txn_model": out.contributions,
-                "rule_hits": out.rule_hits,
-                "top_reasons": [r.model_dump() for r in response.top_reasons],
-            },
+            meta_score=scored.out.meta_score,  # before the F2 rule; risk_score is on the txn
+            shap_json={"top": scored.shap_top, "rule_hits": scored.out.rule_hits},
             explanation=response.explanation,
+            explanation_lang=user.language,
         )
     )
     return txn.id

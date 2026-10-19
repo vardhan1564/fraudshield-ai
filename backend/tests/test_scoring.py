@@ -22,7 +22,7 @@ from app.core.security import create_token, hash_password
 from app.main import create_app
 from app.ml_runtime.registry import ModelOutput
 from app.models import ModelScore, Payee, Transaction, User
-from app.models.enums import Decision, Role
+from app.models.enums import Decision, Language, Role
 from app.services.decision import ActiveRule
 from tests.conftest import unavailable
 
@@ -75,20 +75,32 @@ async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
         yield ac
 
 
-@pytest.fixture
-async def customer(app: FastAPI) -> User:
+async def make_user(
+    app: FastAPI, role: Role = Role.CUSTOMER, language: Language = Language.EN
+) -> User:
     async with app.state.sessionmaker() as session:
         user = User(
             external_id=f"U{uuid.uuid4().hex[:8]}",
-            name="Test Customer",
+            name="Test User",
             phone="9812345621",
-            email=f"c-{uuid.uuid4().hex[:8]}@test.local",
+            email=f"u-{uuid.uuid4().hex[:8]}@test.local",
             password_hash=hash_password("irrelevant-pw", rounds=4),
-            role=Role.CUSTOMER,
+            role=role,
+            language=language,
         )
         session.add(user)
         await session.commit()
         return user
+
+
+@pytest.fixture
+async def customer(app: FastAPI) -> User:
+    return await make_user(app)
+
+
+def bearer(app: FastAPI, user: User) -> dict[str, str]:
+    token, _ = create_token(user.id, user.role.value, "access", app.state.settings)
+    return {"Authorization": f"Bearer {token}"}
 
 
 def payment(user: User, amount: float = 1_000.0, **extra: Any) -> dict[str, Any]:
@@ -124,7 +136,12 @@ async def test_approve_matches_the_spec_shape_and_is_saved(
     }  # fmt: skip
     assert out["decision"] == "APPROVE" and out["action"] == "NONE"
     assert set(out["model_scores"]) == {"transaction", "anomaly", "graph", "social_eng"}
-    assert [x["feature"] for x in out["top_reasons"]] == ["amount", "payee_is_new"]
+    assert [x["text"] for x in out["top_reasons"]] == [
+        "Amount ₹1,000",
+        "First payment to this payee",
+    ]
+    assert out["explanation"] == "This payment looks normal."
+    assert out["explanation_status"] == "ready"
     assert out["coach_questions"] == [] and out["degraded"] == ["graph"]
     assert isinstance(out["latency_ms"], int) and out["model_version"] == "ensemble-test"
 
@@ -134,7 +151,9 @@ async def test_approve_matches_the_spec_shape_and_is_saved(
         assert txn is not None and txn.user_id == customer.id and txn.decision.value == "APPROVE"
         assert str(txn.ip) == "103.21.44.10" and float(txn.amount) == 1000.0
         scores = await session.get(ModelScore, txn.id)
-        assert scores is not None and scores.shap_json["txn_model"]["amount"] == 1.5
+        assert scores is not None and scores.explanation_lang == Language.EN
+        assert scores.shap_json["top"][0] == {"feature": "amount", "value": 1000.0, "impact": 1.5}
+        assert [e["feature"] for e in scores.shap_json["top"]] == ["amount", "payee_is_new", "hour"]
         payee = await session.get(Payee, txn.payee_id)
         assert payee is not None and payee.vpa_or_account == body["payee_vpa"]
     redis: Redis = app.state.redis
@@ -154,6 +173,7 @@ async def test_step_up_scam_coach_when_on_an_unknown_call(
     assert 2 <= len(out["coach_questions"]) <= 3
     assert out["coach_questions"][0]["key"] == "on_call_instructed"
     assert out["explanation_status"] == "pending"
+    assert out["explanation"].startswith("Before you pay, please answer a few quick questions.")
 
 
 async def test_step_up_without_scam_signals_asks_for_otp(
@@ -233,3 +253,61 @@ async def test_bad_requests_are_400(
 ) -> None:
     r = await client.post(URL, json=payment(customer, **change), headers=PARTNER)
     assert r.status_code == 400 and r.json()["error"]["code"] == "VALIDATION_ERROR"
+
+
+async def test_reasons_and_sentence_follow_the_customer_language(
+    app: FastAPI, client: AsyncClient
+) -> None:
+    hindi = await make_user(app, language=Language.HI)
+    out = (await client.post(URL, json=payment(hindi, 80_000.0), headers=PARTNER)).json()
+    assert out["decision"] == "HOLD" and out["explanation_status"] == "pending"
+    assert [r["text"] for r in out["top_reasons"]] == [
+        "राशि ₹80,000", "इस प्राप्तकर्ता को पहला भुगतान"
+    ]  # fmt: skip
+    assert out["explanation"].startswith("हमने यह भुगतान रोक दिया है।")
+
+
+EXPLAIN = "/api/v1/transactions/{}/explain"
+
+
+async def test_explain_returns_the_stored_reasons(
+    app: FastAPI, client: AsyncClient, customer: User
+) -> None:
+    body = payment(customer, 80_000.0)
+    scored = (await client.post(URL, json=body, headers=PARTNER)).json()
+    r = await client.get(EXPLAIN.format(body["txn_id"]), headers=bearer(app, customer))
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert set(out) == {"txn_id", "shap", "explanation", "language"}
+    assert out["txn_id"] == body["txn_id"] and out["language"] == "en"
+    assert out["explanation"] == scored["explanation"]
+    assert [s["feature"] for s in out["shap"]] == ["amount", "payee_is_new", "hour"]
+    assert out["shap"][2] == {"feature": "hour", "value": out["shap"][2]["value"],
+                              "impact": -0.2, "text": out["shap"][2]["text"]}  # fmt: skip
+
+    # Analysts see any payment, by txn_id or UUID, in another language on request.
+    analyst = await make_user(app, role=Role.ANALYST)
+    async with app.state.sessionmaker() as session:
+        txn = await session.scalar(select(Transaction).where(Transaction.txn_id == body["txn_id"]))
+        assert txn is not None
+    r = await client.get(
+        EXPLAIN.format(txn.id), params={"lang": "mr"}, headers=bearer(app, analyst)
+    )
+    assert r.status_code == 200 and r.json()["language"] == "mr"
+    assert r.json()["shap"][0]["text"] == "रक्कम ₹80,000"
+    assert r.json()["explanation"].startswith("आम्ही हे पेमेंट थांबवले आहे.")
+
+
+async def test_explain_access(app: FastAPI, client: AsyncClient, customer: User) -> None:
+    body = payment(customer)
+    assert (await client.post(URL, json=body, headers=PARTNER)).status_code == 200
+    url = EXPLAIN.format(body["txn_id"])
+    stranger = await make_user(app)
+    r = await client.get(url, headers=bearer(app, stranger))
+    assert r.status_code == 404 and r.json()["error"]["code"] == "NOT_FOUND"
+    assert (await client.get(url)).status_code == 401
+    assert (await client.get(url, headers=PARTNER)).status_code == 401  # partners: score only
+    missing = await client.get(EXPLAIN.format("TXN-nope"), headers=bearer(app, customer))
+    assert missing.status_code == 404
+    bad_lang = await client.get(url, params={"lang": "fr"}, headers=bearer(app, customer))
+    assert bad_lang.status_code == 400

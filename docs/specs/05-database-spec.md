@@ -49,7 +49,7 @@ id · vpa_or_account text unique · account_user_id FK users null (set when the 
 | latency_ms | int | |
 
 ### model_scores
-txn_id FK (PK) · transaction_score · anomaly_score · graph_score · social_eng_score · meta_score · shap_json jsonb · explanation text · explanation_lang
+txn_id FK (PK) · transaction_score · anomaly_score · graph_score · social_eng_score · meta_score · shap_json jsonb (_T3.5_: `{"top": [{"feature","value","impact","rule"?}...10], "rule_hits": [...]}`) · explanation text · explanation_lang
 
 ### coach_sessions
 id · txn_id FK · questions jsonb · answers jsonb · red_flags int · outcome text · completed_at

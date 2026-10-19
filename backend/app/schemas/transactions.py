@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import AwareDatetime, BaseModel, ConfigDict, Field, IPvAnyAddress, field_validator
 
-from app.models.enums import Channel, Decision
+from app.models.enums import Channel, Decision, Language
 from app.services.decision import Action
 from ml.features.schema import MERCHANT_CATEGORIES
 
@@ -89,3 +89,12 @@ class ScoreResponse(BaseModel):
     model_version: str
     degraded: list[str]
     latency_ms: int
+
+
+class ExplainResponse(BaseModel):
+    """GET /transactions/{id}/explain (spec 04 §2.3): the stored top 10 SHAP values."""
+
+    txn_id: str
+    shap: list[Reason]
+    explanation: str
+    language: Language

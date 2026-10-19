@@ -101,6 +101,8 @@ Response 200:
 ### 2.3 `GET /transactions/{id}/explain`
 → `{"txn_id", "shap": [{"feature","value","impact","text"}...10], "explanation", "language"}`
 
+_(T3.5)_ `{id}` is the client `txn_id` or the transaction UUID. Optional `?lang=en|hi|mr` (default: the stored sentence's language; another language gets the template sentence). `shap` is the top 10 by |impact| in both directions (negative = made the payment look safer); `impact` is meta-model log-odds. Customers get 404 for payments that are not theirs; partners can't call it. In `/transactions/score`, `top_reasons` and `explanation` are in the customer's language, and `explanation_status` is `pending` except for APPROVE.
+
 ### 2.4 `PATCH /cases/{id}`
 ```json
 {"status": "closed", "label": "fraud", "notes": "Confirmed with customer by phone"}

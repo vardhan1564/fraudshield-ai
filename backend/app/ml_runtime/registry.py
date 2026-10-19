@@ -13,8 +13,8 @@ from typing import Any
 import joblib
 import numpy as np
 import pandas as pd
-import xgboost as xgb
 
+from app.services.explain import combine, meta_weights, tree_shap
 from ml.features.schema import DTYPES, FEATURE_NAMES, MERCHANT_CATEGORIES
 from ml.models.meta_model import SCORE_COLUMNS, BaseModels, apply_rules, rule_hits
 
@@ -26,13 +26,14 @@ REQUIRED = ("txn_model.json", "anomaly_model.pt", "social_model.txt", "meta_mode
 
 @dataclass(frozen=True)
 class ModelOutput:
-    """One payment's scores. `contributions` are the txn model's exact TreeSHAP values."""
+    """One payment's scores. `contributions`: each feature's effect on the meta-model log-odds
+    (TreeSHAP of txn_model + social_model, see services/explain.py)."""
 
     scores: dict[str, float]  # txn_score, anomaly_score, social_eng_score, graph_score
     meta_score: float  # calibrated meta-model probability, before rules
     risk_score: float  # meta_score plus the F2 rule boost, capped at 1
     rule_hits: list[str]
-    contributions: dict[str, float]  # feature -> SHAP value (log-odds) for txn_model
+    contributions: dict[str, float]  # feature -> meta-model log-odds
 
 
 class ModelRegistry:
@@ -44,6 +45,7 @@ class ModelRegistry:
         self.hold = float(thresholds["hold"])
         self.boost = float(thresholds["risk_rules"]["unknown_call_new_payee"]["add"])
         txn_version = base.txn_meta.get("version", "?")
+        self.shap_weights = meta_weights(meta)
         self.version = f"ensemble-{thresholds.get('created', 'unknown')}-txn{txn_version}"
 
     @classmethod
@@ -64,15 +66,12 @@ class ModelRegistry:
         meta = float(self.meta.predict_proba(scores[SCORE_COLUMNS].to_numpy())[:, 1][0])
         risk = float(apply_rules(np.array([meta]), X, self.boost)[0])  # = risk_score()
         hits = ["unknown_call_new_payee"] if bool(rule_hits(X)[0]) else []
-        contribs = self.base.txn.predict(
-            xgb.DMatrix(X[FEATURE_NAMES], enable_categorical=True), pred_contribs=True
-        )[0]
         return ModelOutput(
             scores={k: float(v) for k, v in scores.iloc[0].items()},
             meta_score=meta,
             risk_score=risk,
             rule_hits=hits,
-            contributions=dict(zip(FEATURE_NAMES, map(float, contribs[:-1]), strict=True)),
+            contributions=combine(tree_shap(self.base, X), self.shap_weights),
         )
 
 
