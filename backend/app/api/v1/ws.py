@@ -11,7 +11,9 @@ import asyncio
 import contextlib
 from datetime import UTC, datetime
 
+import anyio
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, status
+from redis.exceptions import RedisError
 from starlette.websockets import WebSocketState
 
 from app.core.errors import AppError
@@ -54,22 +56,25 @@ async def relay(ws: WebSocket, channel: str, ttl_s: float) -> None:
             while (await ws.receive())["type"] != "websocket.disconnect":
                 pass  # clients don't send anything; ignore it
 
-    tasks = [
-        asyncio.create_task(forward()),
-        asyncio.create_task(until_client_leaves()),
-        asyncio.create_task(asyncio.sleep(max(ttl_s, 0))),  # token expiry
-    ]
+    expiry = asyncio.create_task(asyncio.sleep(max(ttl_s, 0)))
+    tasks = [asyncio.create_task(forward()), asyncio.create_task(until_client_leaves()), expiry]
+    expired = False
     try:
         await asyncio.wait(tasks, return_when=asyncio.FIRST_COMPLETED)
+        expired = expiry.done() and not expiry.cancelled()  # before we cancel the rest
     finally:
-        for task in tasks:
-            task.cancel()
-        await asyncio.gather(*tasks, return_exceptions=True)
-        await pubsub.unsubscribe(channel)
-        await pubsub.aclose()
-        if ws.client_state == WebSocketState.CONNECTED:
-            with contextlib.suppress(RuntimeError):  # client already gone
-                await ws.close(code=POLICY_VIOLATION if tasks[2].done() else 1000)
+        # Shielded: a cancellation (server shutdown, the client's close racing us) must not
+        # stop the clean-up half way and leak the pub/sub connection.
+        with anyio.CancelScope(shield=True):
+            for task in tasks:
+                task.cancel()
+            await asyncio.gather(*tasks, return_exceptions=True)
+            with contextlib.suppress(RedisError):
+                await pubsub.unsubscribe(channel)
+            await pubsub.aclose()
+            if ws.client_state == WebSocketState.CONNECTED:
+                with contextlib.suppress(RuntimeError):  # client already gone
+                    await ws.close(code=POLICY_VIOLATION if expired else 1000)
 
 
 @router.websocket("/alerts")
