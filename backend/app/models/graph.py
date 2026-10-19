@@ -22,7 +22,7 @@ class GraphEdge(Base):
     src_id: Mapped[str] = mapped_column(Text, index=True)  # e.g. A:{user_id}
     dst_id: Mapped[str] = mapped_column(Text, index=True)  # e.g. P:{vpa}
     amount: Mapped[Decimal | None]
-    txn_id: Mapped[str | None] = mapped_column(Text)
+    txn_id: Mapped[str | None] = mapped_column(Text, index=True)  # worker retries replace by txn
     ts: Mapped[datetime] = mapped_column(index=True)
 
 

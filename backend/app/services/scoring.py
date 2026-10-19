@@ -4,11 +4,10 @@ In the request: duplicate check -> online features (one Redis round trip) -> mod
 thread) -> decision -> SHAP reasons + template sentence in the customer's language -> response
 (explanation_status "pending": the worker's LLM sentence follows over WebSocket). After the
 response (background task): update the Redis feature state, save transaction + model_scores to
-Postgres, publish to stream:transactions.scored (outbox row if Redis is down).
+Postgres, publish to stream:transactions.scored via streaming/bus.py (outbox row if Redis is down).
 """
 
 import asyncio
-import json
 import logging
 import time
 import uuid
@@ -26,17 +25,17 @@ from app.api.deps import Principal
 from app.core.config import Settings
 from app.core.errors import AppError
 from app.ml_runtime.registry import ModelOutput, ModelRegistry
-from app.models import Device, ModelScore, Outbox, Payee, Transaction, User
+from app.models import Device, ModelScore, Payee, Transaction, User
 from app.models.enums import Decision, Role
 from app.schemas.transactions import CoachQuestion, ModelScores, ScoreRequest, ScoreResponse
 from app.services import explain
 from app.services.decision import QUESTIONS, ActiveRule, decide
 from app.services.features import PaymentIn, build_features, record
+from app.streaming import bus
 
 logger = logging.getLogger(__name__)
 
 SEEN_TTL_S = 7 * 86_400  # duplicate txn_id window (409 DUPLICATE_TXN)
-STREAM_MAXLEN = 100_000
 
 
 def model_unavailable() -> AppError:
@@ -180,22 +179,22 @@ async def after_response(
         "action": response.action,
         "top_reasons": [r.model_dump() for r in response.top_reasons],
         "explanation": response.explanation,
+        "explanation_status": response.explanation_status,
         "model_version": response.model_version,
+        # for the graph_edges consumer (spec 05 §3); stays inside Redis, never logged
+        "account_id": body.user_id,
+        "payee_vpa": body.payee_vpa.lower(),
+        "device_id": body.device_id,
+        "ip": None if body.ip is None else str(body.ip),
+        "amount": body.amount,
+        "ts": body.timestamp.isoformat(),
         "scored_at": datetime.now(UTC).isoformat(),
     }
     try:
         async with sessionmaker() as session:
             txn_uuid = await _save(session, body, response, user, scored)
             event["id"] = str(txn_uuid)
-            try:
-                await redis.xadd(
-                    settings.stream_scored,
-                    {"data": json.dumps(event)},
-                    maxlen=STREAM_MAXLEN,
-                    approximate=True,
-                )
-            except RedisError:  # the worker replays outbox rows when Redis is back
-                session.add(Outbox(stream=settings.stream_scored, payload=event))
+            await bus.publish(redis, session, settings.stream_scored, event)  # or outbox row
             await session.commit()
     except Exception:
         logger.exception("saving scored transaction failed", extra={"txn_id": body.txn_id})

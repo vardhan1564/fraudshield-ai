@@ -94,7 +94,7 @@ id · member_ids text[] · score real · detector text (`fan_in`, `pass_through`
 ### outbox
 id bigserial · stream text · payload jsonb · created_at · sent_at null — fallback when Redis is down; the worker replays unsent rows.
 
-Indexes: transactions(user_id, ts desc), transactions(payee_id, ts desc), alerts(status, created_at), reports(payee_id), graph_edges(ts), graph_edges(src_id), graph_edges(dst_id).
+Indexes: transactions(user_id, ts desc), transactions(payee_id, ts desc), alerts(status, created_at), reports(payee_id), graph_edges(ts), graph_edges(src_id), graph_edges(dst_id), graph_edges(txn_id) _(T3.6: the consumer replaces a transaction's rows on retry)_.
 
 ## 2. Redis keys
 | Key | Type | TTL | Content |
