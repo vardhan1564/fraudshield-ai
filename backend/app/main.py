@@ -19,7 +19,8 @@ from app.core.metrics import RequestContextMiddleware
 from app.core.redis import make_redis
 from app.ml_runtime.registry import ModelRegistry
 from app.schemas.errors import ErrorResponse
-from app.services.rules import load_active_rules
+from app.services.model_versions import register_loaded
+from app.services.rules import RuleCache
 
 logger = logging.getLogger(__name__)
 
@@ -35,7 +36,9 @@ async def load_models_and_rules(app: FastAPI, settings: Settings) -> None:
         logger.warning("models not loaded; /transactions/score returns 503", exc_info=True)
     try:
         async with app.state.sessionmaker() as session:
-            app.state.rules = await load_active_rules(session)
+            await app.state.rules.refresh(session, None)
+            if app.state.registry is not None:
+                await register_loaded(session, app.state.registry)
     except (OSError, SQLAlchemyError):
         if settings.app_env == "production":
             raise
@@ -66,7 +69,7 @@ def create_app(settings: Settings | None = None) -> FastAPI:
     app.state.sessionmaker = make_sessionmaker(app.state.engine)
     app.state.redis = make_redis(settings)
     app.state.registry = None  # filled at startup (lifespan); None -> 503 MODEL_UNAVAILABLE
-    app.state.rules = []
+    app.state.rules = RuleCache()  # loaded at startup, reloaded when rules:version moves
 
     app.add_middleware(
         CORSMiddleware,

@@ -230,3 +230,8 @@ async def put_device(redis: Redis, device_id: str, first_seen: datetime, is_root
 
 async def add_report(redis: Redis, payee_vpa: str) -> None:
     await redis.hincrby(f"rep:{payee_vpa}", "report_count", 1)
+
+
+async def put_report_count(redis: Redis, payee_vpa: str, report_count: int) -> None:
+    """The payee's report count as the database has it (POST /reports, T3.8)."""
+    await redis.hset(f"rep:{payee_vpa}", "report_count", str(report_count))

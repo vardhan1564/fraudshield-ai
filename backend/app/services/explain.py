@@ -10,20 +10,20 @@ meta-model log-odds; the F2 rule's entry carries its fixed boost instead.
 """
 
 import math
-import uuid
 from collections import defaultdict
 from typing import Any
 
 import numpy as np
 import pandas as pd
 import xgboost as xgb
-from sqlalchemy import or_, select
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
 from app.models import ModelScore, Transaction, User
 from app.models.enums import Decision, Language, Role
 from app.schemas.transactions import ExplainResponse, Reason
+from app.services.lookups import by_ref
 from app.services.reason_map import phrase
 from ml.features.schema import DTYPES, FEATURE_NAMES
 from ml.models import social_model
@@ -109,8 +109,11 @@ def ranked(
         feature = RULE_FEATURES.get(hit)
         if feature is None:  # admin rules have no feature of their own
             continue
-        entry = next(e for e in out if e["feature"] == feature)
-        out.remove(entry)
+        entry = next((e for e in out if e["feature"] == feature), None)
+        if entry is None:  # no SHAP value for it: the rule still explains the decision
+            entry = {"feature": feature, "value": jsonable(features[feature]), "impact": 0.0}
+        else:
+            out.remove(entry)
         if hit == "unknown_call_new_payee":
             entry = {**entry, "impact": round(boost, 4)}
         out.insert(0, {**entry, "rule": hit})
@@ -197,12 +200,7 @@ async def explanation_for(
     query = select(Transaction, ModelScore, User).join(
         ModelScore, ModelScore.txn_id == Transaction.id
     ).join(User, User.id == Transaction.user_id)  # fmt: skip
-    try:
-        query = query.where(
-            or_(Transaction.txn_id == txn_ref, Transaction.id == uuid.UUID(txn_ref))
-        )
-    except ValueError:
-        query = query.where(Transaction.txn_id == txn_ref)
+    query = query.where(by_ref(txn_ref))
     row = (await session.execute(query)).first()
     if row is None or (viewer.role == Role.CUSTOMER and row[0].user_id != viewer.id):
         raise AppError(404, "NOT_FOUND", "Transaction not found")  # no hint it exists

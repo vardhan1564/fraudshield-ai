@@ -29,8 +29,9 @@ from app.models import Device, ModelScore, Payee, Transaction, User
 from app.models.enums import Decision, Role
 from app.schemas.transactions import CoachQuestion, ModelScores, ScoreRequest, ScoreResponse
 from app.services import explain
-from app.services.decision import QUESTIONS, ActiveRule, decide
+from app.services.decision import QUESTIONS, decide
 from app.services.features import PaymentIn, build_features, record
+from app.services.rules import VERSION_KEY, RuleCache
 from app.streaming import bus
 
 logger = logging.getLogger(__name__)
@@ -99,7 +100,7 @@ async def score(
     session: AsyncSession,
     redis: Redis,
     registry: ModelRegistry | None,
-    rules: list[ActiveRule],
+    rules: RuleCache,
 ) -> tuple[ScoreResponse, User, Scored]:
     started = time.perf_counter()
     if registry is None:
@@ -109,9 +110,12 @@ async def score(
     async with redis.pipeline(transaction=False) as pipe:
         pipe.set(f"seen:{body.txn_id}", "1", nx=True, ex=SEEN_TTL_S)
         pipe.exists(f"graph:{body.user_id}")
-        first_time, has_graph = await pipe.execute()
+        pipe.get(VERSION_KEY)
+        first_time, has_graph, rules_version = await pipe.execute()
     if not first_time:
         raise AppError(409, "DUPLICATE_TXN", "This txn_id was already scored")
+    if rules_version != rules.version:  # an admin changed the rules (rare): reload once
+        await rules.refresh(session, rules_version)
     try:
         payment = to_payment(body)
         features = await build_features(payment, redis)
@@ -121,7 +125,7 @@ async def score(
         raise
     outcome = decide(
         out.risk_score, registry.step_up, registry.hold, features,
-        out.scores["social_eng_score"], rules,
+        out.scores["social_eng_score"], rules.rules,
     )  # fmt: skip
     stored = explain.ranked(
         out.contributions, features, [*out.rule_hits, *outcome.rule_hits], registry.boost

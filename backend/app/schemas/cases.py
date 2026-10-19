@@ -2,23 +2,11 @@
 
 import uuid
 from datetime import datetime
-from typing import Generic, TypeVar
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from app.models.enums import AlertStatus, CaseLabel, Channel, Decision, Severity
 from app.schemas.transactions import Reason
-
-T = TypeVar("T")
-
-
-class Page(BaseModel, Generic[T]):
-    """Spec 04 pagination: `?page=1&page_size=50`."""
-
-    items: list[T]
-    page: int
-    page_size: int
-    total: int
 
 
 class AlertItem(BaseModel):

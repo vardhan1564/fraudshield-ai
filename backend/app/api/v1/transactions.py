@@ -1,8 +1,9 @@
-"""/transactions (spec 04): real-time scoring and explanations."""
+"""/transactions (spec 04 endpoints 5, 7, 8, 9): scoring, the analyst list, detail, explanation."""
 
+from datetime import datetime
 from typing import Annotated, Any
 
-from fastapi import APIRouter, BackgroundTasks, Depends, Request
+from fastapi import APIRouter, BackgroundTasks, Depends, Query, Request
 
 from app.api.deps import (
     Principal,
@@ -14,11 +15,13 @@ from app.api.deps import (
 )
 from app.ml_runtime.registry import ModelRegistry
 from app.models import User
-from app.models.enums import Language, Role
+from app.models.enums import Channel, Decision, Language, Role
+from app.schemas.common import Page, PageNo, PageSize
 from app.schemas.errors import ErrorResponse
 from app.schemas.transactions import ExplainResponse, ScoreRequest, ScoreResponse
-from app.services import explain, scoring
-from app.services.decision import ActiveRule
+from app.schemas.txn_views import TxnDetail, TxnItem
+from app.services import explain, scoring, txn_views
+from app.services.rules import RuleCache
 
 router = APIRouter(prefix="/transactions", tags=["transactions"])
 ERRORS: dict[int | str, dict[str, Any]] = {
@@ -31,8 +34,8 @@ def get_registry(request: Request) -> ModelRegistry | None:
     return registry
 
 
-def get_rules(request: Request) -> list[ActiveRule]:
-    rules: list[ActiveRule] = request.app.state.rules
+def get_rules(request: Request) -> RuleCache:
+    rules: RuleCache = request.app.state.rules
     return rules
 
 
@@ -46,7 +49,7 @@ async def score(
     redis: RedisDep,
     settings: SettingsDep,
     registry: Annotated[ModelRegistry | None, Depends(get_registry)],
-    rules: Annotated[list[ActiveRule], Depends(get_rules)],
+    rules: Annotated[RuleCache, Depends(get_rules)],
 ) -> ScoreResponse:
     """Score one payment in real time: risk_score, decision, action and top_reasons.
 
@@ -76,3 +79,36 @@ async def explanation(
     payments (404 otherwise). `lang` defaults to the language of the stored sentence.
     """
     return await explain.explanation_for(txn_ref, viewer, session, lang)
+
+
+@router.get("", response_model=Page[TxnItem], responses=ERRORS)
+async def list_transactions(
+    _staff: Annotated[User, Depends(require_role(Role.ANALYST, Role.ADMIN))],
+    session: SessionDep,
+    decision: Decision | None = None,
+    channel: Channel | None = None,
+    user_id: Annotated[str | None, Query(max_length=64)] = None,
+    payee_vpa: Annotated[str | None, Query(max_length=255)] = None,
+    date_from: Annotated[datetime | None, Query(alias="from")] = None,
+    date_to: Annotated[datetime | None, Query(alias="to")] = None,
+    min_risk: Annotated[float | None, Query(ge=0, le=1)] = None,
+    page: PageNo = 1,
+    page_size: PageSize = 50,
+) -> Page[TxnItem]:
+    """Scored payments, newest first. `from` inclusive, `to` exclusive (ISO-8601);
+    `user_id` is the customer's external id or UUID."""
+    return await txn_views.list_transactions(
+        session, decision=decision, channel=channel, user_ref=user_id, payee_vpa=payee_vpa,
+        date_from=date_from, date_to=date_to, min_risk=min_risk, page=page, page_size=page_size,
+    )  # fmt: skip
+
+
+@router.get("/{txn_ref}", response_model=TxnDetail, responses=ERRORS)
+async def get_transaction(
+    txn_ref: str,
+    viewer: Annotated[User, Depends(require_role(Role.ANALYST, Role.ADMIN, Role.CUSTOMER))],
+    session: SessionDep,
+) -> TxnDetail:
+    """One payment by txn_id or UUID: scores, reasons (viewer's language), explanation,
+    context and device. Customers see only their own payments (404 otherwise)."""
+    return await txn_views.get_transaction(session, txn_ref, viewer)

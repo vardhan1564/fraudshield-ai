@@ -76,7 +76,7 @@ def _app(tmp_path: Path, env: str) -> tuple[FastAPI, Settings]:
 async def test_startup_without_models(tmp_path: Path) -> None:
     app, settings = _app(tmp_path, "test")
     await load_models_and_rules(app, settings)  # dev/test: keep running, score -> 503
-    assert app.state.registry is None and app.state.rules == []
+    assert app.state.registry is None and app.state.rules.rules == []
     await app.state.engine.dispose()
 
     prod, prod_settings = _app(tmp_path, "production")

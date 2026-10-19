@@ -108,6 +108,7 @@ Indexes: transactions(user_id, ts desc), transactions(payee_id, ts desc), alerts
 | `rep:{vpa}` | hash | 10 min | reputation_score, report_count, account_age_days |
 | `rl:{api_key}` | int | 1 s | rate limit |
 | `rl:login:{ip}` | int | 60 s | login attempts this minute (T3.2) |
+| `rules:version` | int | none | bumped by every rules API change; scoring reloads its rule cache when it moves (T3.8) |
 | `refresh:{jti}` | string | refresh lifetime (7 d) | user id; deleted when the refresh token is used (rotation, T3.2) |
 
 Use Redis pipelines; one round trip per request.

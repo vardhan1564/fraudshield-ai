@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P3 Backend
-- **Next task:** T3.8 Remaining business APIs (B)
+- **Next task:** T3.9 Load test, Gate B (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none (close Chrome before IEEE runs: the laptop is short of memory)
 
@@ -45,7 +45,7 @@
 - [x] T3.5 Explanations · A
 - [x] T3.6 Worker: Redis Streams + jobs · A
 - [x] T3.7 Alerts, cases, WebSockets · B
-- [ ] T3.8 Remaining business APIs · B
+- [x] T3.8 Remaining business APIs · B
 - [ ] T3.9 Load test (Gate B) · B
 
 ### P4 Front ends (Weeks 6–9)
@@ -87,9 +87,16 @@
 | 2026-10-17 | Develop on native Windows (PowerShell), WSL2 optional | Lead's machine runs natively; Docker Desktop handles WSL2 itself |
 | 2026-10-17 | One `.venv` at repo root; `ml/requirements.txt` includes `backend/requirements.txt` | Solo-friendly; models trained with the same versions they're served with |
 | 2026-10-18 | Gate A re-based: PR-AUC > 0.80 on the served UPI risk_score + IEEE-CIS PR-AUC ≥ 0.50 floor (spec 03 §6) | 0.80 on an IEEE time split is above Kaggle-winner level; IEEE lacks our UPI signals. IEEE retrained with card-uid features first (0.470 → 0.503) |
+| 2026-10-19 | One consumer group per worker consumer (not one shared `workers` group) | A shared group hands each event to only one consumer; every consumer must see every event |
+| 2026-10-19 | Every alert gets its case when the worker creates it; PATCH `status` is the alert's | `cases` has no status column; analysts always have a case to open |
+| 2026-10-19 | Reports update payee reputation at once; T5.5 keeps confirmed fraud + cache | The ≥ 5-reports warning works on the very next payment |
+| 2026-10-19 | Rule changes reach all API processes via Redis `rules:version`, read in scoring's existing round trip | No extra Redis call per payment, no listener |
+| 2026-10-19 | Model deploy only for the loaded version until T5.8 hot reload | Never mark a model active that isn't serving |
+| 2026-10-19 | One report per customer per payee | One person can't push a payee over the 5-report line |
 
 ## Notes
 <!-- newest first -->
+- 2026-10-19 · B · T3.8 done: endpoints 7, 8, 17, 18, 23-27 (txn list with 7 filters + detail; reports -> payee count/F7 score/rep:{vpa}/stream:reports.created, 409 ALREADY_REPORTED; reputation lookup with staff-only report list; rules CRUD with typed condition validation + rules:version reload in scoring's existing Redis round trip; models list/deploy + start-up registration; metrics overview with defined KPIs; audit log with filters + CSV (formula-injection safe)). Shared Page schema, services/lookups.py. Bugs the tests found: F7 float 0.1*7 > 0.7 (now rounded) and explain.ranked crashing when a rule's feature had no SHAP entry (T3.5, latent). End to end: 5 reports -> next payment STEP_UP with 'Payee reported by 5 users'. Backend 189 pass. Plan changes: T5.5 re-scoped, T5.8 note, 6 decision-log rows · next T3.9
 - 2026-10-19 · B · T3.7 done: GET /alerts (open+assigned, severity then oldest, paged), GET/PATCH /cases/{id} (status on the alert, label+notes on the case, assign, closing needs a label; audit row with changed fields; new label -> stream:cases.labeled via bus.publish in the same transaction; case.updated pushed after commit). /api/v1/ws/alerts and /ws/customer relay Redis pub/sub (subscribe before accept, 1008 on bad token/role, close at token expiry). Worker now creates the case with the alert; alert.created has case_id. services/audit.py record() used by case updates and auth register/login/login_failed (spec 08). Tests: starlette TestClient with the real worker on the app loop: HOLD -> alert.created on /ws/alerts < 1 s, LLM sentence on /ws/customer, customers only get their own channel; backend 150 pass. Follow-up: rule changes / model deploys get audit rows when T4.7/T5.8 add them · next T3.8
 - 2026-10-19 · A · T3.6 done: `python -m app.streaming.worker` runs alert_pusher (HOLD -> alert row + alert.created on ws:analysts), llm_explainer (Claude -> Ollama -> template sentence saved to model_scores + explanation.ready on ws:user:{id} and ws:analysts) and graph_edges (SENT/USED_DEVICE/LOGGED_FROM rows), each in its own consumer group (spec 02 said one shared group, which would split events: spec edited). 3 tries then stream:dead; own pending drained on start, XAUTOCLAIM after 60 s; APScheduler job outbox_replay every 10 s. streaming/bus.py publish() = XADD or outbox row, scoring uses it. services/notify.py pub/sub helpers. New index graph_edges(txn_id) (migration b4daed2e3633). 6 integration tests on docker Redis + test DB incl. the real worker process; backend 139 pass. The /ws endpoints themselves are T3.7 (tests prove the pub/sub message) · next T3.7
 - 2026-10-19 · A · T3.5 done: services/explain.py combines exact TreeSHAP of txn_model + social_model (booster pred_contribs, same algorithm as shap.TreeExplainer) through the meta-model's logistic weights, so impact = share of the meta log-odds (test: sums match the meta-model exactly) and scam signals like screen share now show as reasons; rule hits listed first, 3-5 positive top_reasons, top 10 stored in model_scores.shap_json. Explain step p50 9.9 / p95 12.9 ms (< 15) after a numpy one-row DMatrix with nthread=1 (pandas DMatrix was ~2x slower). reason_map.py: phrase for all 38 features in en/hi/mr (Hindi/Marathi need a native speaker's review). services/llm/: Claude (effort low, no SDK retries) -> Ollama -> template, LLM_TIMEOUT_MS each, never raises; worker calls it in T3.6. Score response uses the customer's language, status pending except APPROVE. GET /transactions/{id}/explain (txn_id or UUID, ?lang=, analyst/admin/owner, 404 for others). Backend 133 tests pass. Specs 01 F4, 04 §2.3, 05 noted. Follow-ups for T3.9: to_frame() (~36 ms under load) is the scoring hot spot; coach questions are English-only (T5.4) · next T3.6

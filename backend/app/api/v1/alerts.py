@@ -2,12 +2,13 @@
 
 from typing import Annotated, Any
 
-from fastapi import APIRouter, Depends, Query
+from fastapi import APIRouter, Depends
 
 from app.api.deps import SessionDep, require_role
 from app.models import User
 from app.models.enums import AlertStatus, Role
-from app.schemas.cases import AlertItem, Page
+from app.schemas.cases import AlertItem
+from app.schemas.common import Page, PageNo, PageSize
 from app.schemas.errors import ErrorResponse
 from app.services import cases
 
@@ -20,8 +21,8 @@ async def list_alerts(
     analyst: Annotated[User, Depends(require_role(Role.ANALYST))],
     session: SessionDep,
     status: AlertStatus | None = None,
-    page: Annotated[int, Query(ge=1)] = 1,
-    page_size: Annotated[int, Query(ge=1, le=200)] = 50,
+    page: PageNo = 1,
+    page_size: PageSize = 50,
 ) -> Page[AlertItem]:
     """Open and assigned alerts (or one `status`), most severe first, then oldest first.
     Reasons are in the analyst's language. New alerts also arrive on `/ws/alerts`."""

@@ -20,14 +20,8 @@ from app.core.errors import AppError
 from app.core.privacy import mask_phone
 from app.models import Alert, Case, ModelScore, Payee, Transaction, User
 from app.models.enums import AlertStatus, Language, Role
-from app.schemas.cases import (
-    AlertItem,
-    CaseCustomer,
-    CaseDetail,
-    CaseTransaction,
-    CaseUpdate,
-    Page,
-)
+from app.schemas.cases import AlertItem, CaseCustomer, CaseDetail, CaseTransaction, CaseUpdate
+from app.schemas.common import Page
 from app.schemas.transactions import Reason
 from app.services import audit, explain, notify
 from app.streaming import bus

@@ -191,7 +191,7 @@ async def test_hold_goes_to_an_analyst(client: AsyncClient, customer: User) -> N
 async def test_admin_rule_overrides_the_model(
     app: FastAPI, client: AsyncClient, customer: User
 ) -> None:
-    app.state.rules = [
+    app.state.rules.rules = [
         ActiveRule("fuel cap", {"all": [{"field": "merchant_category", "op": "==",
                                          "value": "FUEL"}]}, Decision.HOLD, 1)
     ]  # fmt: skip

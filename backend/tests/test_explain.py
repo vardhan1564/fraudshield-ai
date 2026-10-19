@@ -69,6 +69,13 @@ def entry(feature: str, impact: float, value: Any = 1, **extra: Any) -> dict[str
     return {"feature": feature, "value": value, "impact": impact, **extra}
 
 
+def test_a_rule_without_a_shap_value_still_comes_first() -> None:
+    features: dict[str, Any] = {n: 0 for n in FEATURE_NAMES} | {"payee_report_count": 6}
+    stored = explain.ranked({"amount": 1.0}, features, ["reported_payee"], 0.25)
+    assert stored[0] == {"feature": "payee_report_count", "value": 6, "impact": 0.0,
+                         "rule": "reported_payee"}  # fmt: skip
+
+
 def test_top_reasons_three_to_five_positive_and_distinct() -> None:
     stored = [
         entry("amount", 3.0, 48500.0),

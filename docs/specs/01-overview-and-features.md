@@ -83,6 +83,7 @@ The PRD (`docs/PRD.md`) holds the why; this file holds the how.
 - Updated on every report and every confirmed case.
 - Used as feature `payee_reputation` and as hard rule (report_count ≥ 5 → minimum STEP_UP).
 - Public lookup: `GET /payees/{vpa}/reputation`.
+- _(T3.8)_ Score rounded to 4 decimals (0.1 × 7 = 0.7000000000000001 would read as high). A report updates the payee row and the online `rep:{vpa}` count at once; confirmed cases follow in T5.5.
 
 ---
 
