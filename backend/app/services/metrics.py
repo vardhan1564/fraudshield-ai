@@ -56,42 +56,55 @@ async def overview(
             .where(in_window)
         )
 
-    totals = (
-        await session.execute(
-            scored().add_columns(
-                func.count(),
-                func.count().filter(flagged),
-                func.coalesce(
-                    func.sum(Transaction.amount).filter(
-                        flagged, Transaction.decision == Decision.HOLD
-                    ),
-                    0,
-                ),
-                func.percentile_cont(0.95).within_group(Transaction.latency_ms),
-                func.count().filter(Case.label.is_not(None)),
-                func.count().filter(Case.label == CaseLabel.LEGIT),
-            )
-        )
-    ).one()
-    txn_count, caught, saved, p95, labeled, legit = totals
-
+    # Two scans instead of four (T4.2: the Overview must load in < 1.5 s on 100k+ payments):
+    # 1. every payment in the window: totals + per hour + p95 in one ROLLUP (the NULL-hour row is
+    #    the total); 2. flagged payments only: per type and per city in one GROUPING SETS.
     hour = func.extract("hour", func.timezone("Asia/Kolkata", Transaction.ts)).label("hour")
-    hours = {
-        int(h): (int(total), int(flags))
-        for h, total, flags in await session.execute(
-            scored().add_columns(hour, func.count(), func.count().filter(flagged)).group_by(hour)
+    rows = await session.execute(
+        scored()
+        .add_columns(
+            hour,
+            func.count(),
+            func.count().filter(flagged),
+            func.coalesce(
+                func.sum(Transaction.amount).filter(flagged, Transaction.decision == Decision.HOLD),
+                0,
+            ),
+            func.percentile_cont(0.95).within_group(Transaction.latency_ms),
+            func.count().filter(Case.label.is_not(None)),
+            func.count().filter(Case.label == CaseLabel.LEGIT),
         )
-    }
+        .group_by(func.rollup(hour))
+    )
+    hours: dict[int, tuple[int, int]] = {}
+    txn_count = caught = labeled = legit = 0
+    saved: Any = 0
+    p95: Any = None
+    for h, total, flags, hour_saved, hour_p95, hour_labeled, hour_legit in rows:
+        if h is None:  # the ROLLUP total row
+            txn_count, caught, saved, p95 = int(total), int(flags), hour_saved, hour_p95
+            labeled, legit = int(hour_labeled), int(hour_legit)
+        else:
+            hours[int(h)] = (int(total), int(flags))
+
     scenario = func.coalesce(Transaction.scenario, "unknown").label("scenario")
-    types = await session.execute(
-        scored().add_columns(scenario, func.count()).where(flagged)
-        .group_by(scenario).order_by(func.count().desc(), scenario)
-    )  # fmt: skip
     city = func.coalesce(User.city, "unknown").label("city")
-    cities = await session.execute(
-        scored().join(User, User.id == Transaction.user_id).add_columns(city, func.count())
-        .where(flagged).group_by(city).order_by(func.count().desc(), city).limit(TOP_CITIES)
-    )  # fmt: skip
+    groups = await session.execute(
+        scored()
+        .join(User, User.id == Transaction.user_id)
+        .add_columns(func.grouping(scenario), scenario, city, func.count())
+        .where(flagged)
+        .group_by(func.grouping_sets(scenario, city))
+    )
+    type_counts: list[tuple[str, int]] = []
+    city_counts: list[tuple[str, int]] = []
+    for by_city, name, city_name, n in groups:
+        if by_city:  # grouping(scenario) = 1: this row is a city total
+            city_counts.append((city_name, int(n)))
+        else:
+            type_counts.append((name, int(n)))
+    types = sorted(type_counts, key=lambda r: (-r[1], r[0]))
+    cities = sorted(city_counts, key=lambda r: (-r[1], r[0]))[:TOP_CITIES]
     return MetricsOverview(
         date_from=start,
         date_to=end,

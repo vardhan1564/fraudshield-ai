@@ -6,6 +6,7 @@ import { SettingsPage } from "@/customer/pages/SettingsPage";
 import { DashboardLayout } from "@/dashboard/layout/DashboardLayout";
 import { ALL_NAV } from "@/dashboard/layout/nav";
 import { ComingSoonPage } from "@/dashboard/pages/ComingSoonPage";
+import { OverviewPage } from "@/dashboard/pages/OverviewPage";
 import { CustomerPlaceholder, RootRedirect } from "@/routeElements";
 import { RequireAuth } from "@/shared/components/RequireAuth";
 import { LoginPage } from "@/shared/pages/LoginPage";
@@ -24,7 +25,7 @@ export const routes: RouteObject[] = [
         children: [
           ...ALL_NAV.map((item) =>
             item.to === "/dashboard"
-              ? { index: true, element: <ComingSoonPage task={item.task} /> }
+              ? { index: true, element: <OverviewPage /> }
               : { path: item.to.replace("/dashboard/", ""), element: <ComingSoonPage task={item.task} /> },
           ),
           { path: "cases/:caseId", element: <ComingSoonPage task="T4.4" /> },

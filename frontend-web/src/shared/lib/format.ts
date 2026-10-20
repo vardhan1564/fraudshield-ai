@@ -12,6 +12,26 @@ export function formatInr(amount: number): string {
   return inr.format(amount);
 }
 
+const inrCompact = new Intl.NumberFormat("en-IN", {
+  style: "currency",
+  currency: "INR",
+  notation: "compact",
+  minimumFractionDigits: 0,
+  maximumFractionDigits: 2,
+});
+
+/** 3845200 -> "₹38.45L"; 12500000 -> "₹1.25Cr" (lakh / crore, how Indian users read amounts). */
+export function formatInrCompact(amount: number): string {
+  return inrCompact.format(amount);
+}
+
+const compactNumber = new Intl.NumberFormat("en-IN", { notation: "compact", maximumFractionDigits: 1 });
+
+/** 12480 -> "12.5K", 250000 -> "2.5L" (axis ticks, tiles). */
+export function formatCompact(value: number): string {
+  return compactNumber.format(value);
+}
+
 const indianNumber = new Intl.NumberFormat("en-IN");
 
 /** 1250000 -> "12,50,000". */

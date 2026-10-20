@@ -8,6 +8,13 @@ import { server } from "@/mocks/node";
 import { tokens } from "@/shared/api/tokens";
 import { setLanguage } from "@/shared/i18n";
 
+// jsdom has no ResizeObserver; Recharts' ResponsiveContainer needs one.
+globalThis.ResizeObserver ??= class {
+  observe() {}
+  unobserve() {}
+  disconnect() {}
+};
+
 beforeAll(() => server.listen({ onUnhandledRequest: "error" }));
 afterEach(() => {
   cleanup();

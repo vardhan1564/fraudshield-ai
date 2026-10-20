@@ -19,7 +19,12 @@
     "signedInAs": "Signed in as {{name}}",
     "mockMode": "Demo data"
   },
-  "roles": { "customer": "Customer", "analyst": "Analyst", "admin": "Admin", "partner": "Partner" },
+  "roles": {
+    "customer": "Customer",
+    "analyst": "Analyst",
+    "admin": "Admin",
+    "partner": "Partner"
+  },
   "login": {
     "title": "Sign in",
     "subtitle": "Use your FraudShield account",
@@ -69,5 +74,67 @@
     "title": "Page not found",
     "body": "The page you're looking for doesn't exist.",
     "home": "Go home"
+  },
+  "overview": {
+    "range": {
+      "label": "Time range",
+      "24h": "Last 24 hours",
+      "7d": "Last 7 days",
+      "30d": "Last 30 days"
+    },
+    "updated": "Updated {{time}}",
+    "refreshing": "Refreshing…",
+    "kpi": {
+      "payments": "Payments checked",
+      "paymentsHint": "Scored in this period",
+      "caught": "Fraud caught",
+      "caughtHint": "{{rate}} of payments flagged",
+      "saved": "Money protected",
+      "savedHint": "Held payments not marked legit",
+      "fpr": "False-positive rate",
+      "fprHint": "Legit ÷ all labelled cases",
+      "fprNone": "No labelled cases yet",
+      "p95": "p95 response time",
+      "withinBudget": "Within the 100 ms budget",
+      "overBudget": "Over the 100 ms budget",
+      "noData": "No data yet"
+    },
+    "hourly": {
+      "title": "Activity by hour (IST)",
+      "subtitle": "Payments and flagged payments, same hours: compare the shapes",
+      "volume": "Payments per hour",
+      "flagged": "Flagged per hour",
+      "hour": "Hour",
+      "rate": "Flagged rate"
+    },
+    "types": {
+      "title": "Fraud by type",
+      "subtitle": "Flagged payments by scam type",
+      "type": "Type",
+      "count": "Flagged",
+      "total": "Total flagged"
+    },
+    "cities": {
+      "title": "Top cities",
+      "subtitle": "Flagged payments by customer city",
+      "city": "City",
+      "flagged": "Flagged",
+      "share": "Share"
+    },
+    "table": "Table",
+    "chart": "Chart",
+    "empty": "No payments in this period yet",
+    "emptyBody": "Numbers appear here as soon as payments are scored.",
+    "error": "Couldn't load the overview",
+    "staleError": "Couldn't refresh. Showing the last numbers."
+  },
+  "scenarios": {
+    "digital_arrest": "Digital arrest",
+    "fake_support_refund": "Fake refund support",
+    "investment_task": "Investment / task scam",
+    "account_takeover": "Account takeover",
+    "card_testing": "Card testing",
+    "mule_ring": "Mule ring",
+    "unknown": "Not labelled"
   }
 }

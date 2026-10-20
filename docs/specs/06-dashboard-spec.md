@@ -39,6 +39,8 @@ _(T4.1)_ As built: Vite 8 + React 18.3 + TypeScript 5.9 (strict, `noUncheckedInd
 | `/dashboard/models` | Model Monitor | admin | `/models` | versions, metrics, drift status, Deploy | P1 |
 | `/dashboard/audit` | Audit Log | admin | `/audit-log` | filters, CSV export | P1 |
 
+_(T4.2)_ Overview as built: range presets 24 h / 7 d / 30 d in one row above everything; 5 KPI tiles (payments checked, fraud caught + flagged %, money protected in lakh/crore with the full ₹ value on hover, false-positive rate or "No labelled cases yet", p95 with an icon + words "Within/Over the 100 ms budget"); activity by IST hour as **two small charts on one hour axis** (volume, flagged; never a dual-axis chart, flagged is ~2% of volume) with a synced crosshair; fraud by type as horizontal bars (largest first, value at the tip, total below); top-10 city table with share bars. Every chart has a Chart/Table toggle. Chart colours are their own tokens (`--chart-volume` blue, `--chart-flagged` teal), validated for colour-blind and normal-vision separation in light and dark. Loading = same-shape skeletons, empty = "No payments in this period yet", error = message + Try again; refresh every 30 s keeps the old frame faded. Measured on 109,416 payments (production build, real API, Power saver laptop): full reload to KPIs + charts p50 ~1.0 s, max 1.09 s.
+
 ## 4. Acceptance
 - Overview loads in < 1.5 s with seeded data.
 - Live Monitor shows a new row within 1 s of a scored transaction.
