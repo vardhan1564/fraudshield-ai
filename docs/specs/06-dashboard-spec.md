@@ -18,6 +18,8 @@ frontend-web/src/
 ```
 Login is shared at `/login`: analysts/admins go to `/dashboard`, customers go to `/app`.
 
+_(T4.1)_ As built: Vite 8 + React 18.3 + TypeScript 5.9 (strict, `noUncheckedIndexedAccess`) + Tailwind 4 + shadcn/ui-style components (`shared/components/ui/`) + TanStack Query 5 + React Router 7 + react-i18next (keys type-checked against `en.json`) + MSW 2. `api/client.ts` (axios) adds the bearer token and, on a 401, refreshes once and retries; parallel 401s share **one** refresh (refresh tokens rotate). Access token in memory, refresh token in localStorage (HttpOnly cookie = T6.2 follow-up). `api/ws.ts` reconnects with back-off 1→30 s and refreshes first after a 1008 close. `npm run dev:mock` runs the whole UI on MSW mocks of the P0 endpoints + WebSockets (`src/mocks/`, demo logins on the login page); `npm test` uses the same mocks. Design tokens (OKLCH, light/dark) in `src/index.css`; Inter + Noto Sans Devanagari. The dashboard is responsive (sidebar becomes a drawer below 1024 px) although spec §2 targets ≥ 1280 px.
+
 ## 2. Design rules
 - Risk colours from `shared/lib/riskColor.ts`: green < 0.30, amber 0.30–0.70, red > 0.70. Always pair colour with a text label.
 - Currency `₹48,500` (en-IN grouping). Mask `98xxxxxx21`, VPA `re***@okbank`.

@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P4 Front ends
-- **Next task:** T4.1 Web scaffold, shared layer, login (B)
+- **Next task:** T4.2 Dashboard: Overview (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none (close Chrome before IEEE runs: the laptop is short of memory)
 
@@ -49,7 +49,7 @@
 - [x] T3.9 Load test (Gate B) · B
 
 ### P4 Front ends (Weeks 6–9)
-- [ ] T4.1 Web scaffold, shared layer, login · B
+- [x] T4.1 Web scaffold, shared layer, login · B
 - [ ] T4.2 Dashboard: Overview · B
 - [ ] T4.3 Dashboard: Live Monitor + Alert Queue · B
 - [ ] T4.4 Dashboard: Case Detail · B
@@ -96,9 +96,12 @@
 | 2026-10-20 | The worker writes each scored payment to Postgres (txn_writer), not the API after the response | The save was ~40% of the API's CPU per payment on its event loop; Gate B needed the headroom |
 | 2026-10-20 | Gate B measured with Poisson arrivals after a 30 s warm-up, one uvicorn process, High performance power plan | constant_throughput fired 50 payers in lockstep; Windows `--workers` forces the selector loop; Power saver tripled latency |
 | 2026-10-20 | Redis: AOF only (`--save ""`) | RDB snapshots on top of AOF forked Redis every minute under load and stalled it |
+| 2026-10-20 | Web: access token in memory, refresh token in localStorage | A reload keeps the session; rotation limits a stolen refresh token. HttpOnly cookie needs a backend change: T6.2 |
+| 2026-10-20 | Web: `npm run dev:mock` serves the UI on MSW mocks of the real API shapes | Front-end work and demos don't need the backend; tests use the same mocks |
 
 ## Notes
 <!-- newest first -->
+- 2026-10-20 · B · T4.1 done: frontend-web scaffold (Vite 8, React 18, TS strict, Tailwind 4, shadcn-style ui, TanStack Query, React Router 7, i18next en/hi/mr with type-checked keys, MSW 2). Shared layer: api/client.ts (bearer + one shared refresh for parallel 401s, ApiError from {error}), endpoints/*.ts, ws.ts (auto-reconnect, fresh token after 1008), types/api.ts = spec 04, lib/format.ts (₹ lakh grouping, masks, IST), riskColor.ts. /login redirects analysts/admins to /dashboard and customers to /app (RequireAuth per role); responsive dashboard layout (drawer < 1024 px) and customer PhoneFrame + BottomNav; light/dark theme. `npm run dev:mock` = MSW mocks of the P0 endpoints + WS. Tests 14 (refresh-once, rejected refresh logs out, error mapping, formats, risk bands, login redirects, i18n); tsc 0, eslint 0, build OK; checked visually in Chrome (desktop, tablet drawer, phone, dark, Hindi), 0 console errors. Bugs fixed on the way: refresh skipped for /auth/me, maskPhone re-masked API-masked phones. Follow-ups: spec 07 Home calls /transactions?mine=true but GET /transactions is staff-only -> add a customer 'my payments' endpoint in T4.5; web CI job in T6.1 · next T4.2
 - 2026-10-20 · B · T3.9 done, **Gate B PASS: p95 47 ms at 50.5 rps for 2 min, 0 errors** (server p95 34 ms); max ~75 rps sustained (p95 63 ms), ~100 rps peak, one process on this laptop. load/prepare.py (separate fraudshield_load DB + Redis db 2), locustfile (Poisson, warm-up, ramp), analyze.py; report in load/reports/gate_b_2026-10-20.md (git-ignored). Fixes, each found by measurement: DB connection released before the models (pool exhausted); numpy fast path in the registry (54 -> 5.8 ms, FastMeta = sklearn to 1e-12); post-response save moved to the worker (txn_writer, services/persist.py, exactly-once test); one math thread per prediction; 60 s customer cache; Redis --save "". Laptop factors (not code): Windows Power saver tripled latency (use High performance when measuring), < 1 GB free RAM causes paging spikes. Production (2 workers, Linux) to be re-measured at deploy · next T4.1
 - 2026-10-19 · B · fix: CI run 39266584336 failed test_ws end-to-end (CancelledError on WebSocket close; ~1 in 8 locally). The relay's clean-up (unsubscribe, close pub/sub) could be cancelled half way when the client's close raced it: now shielded (anyio), which also stops leaking a Redis connection per dropped client. Also fixed: token-expiry check ran after cancelling the tasks, so every server-side close said 1008. 32 clean repeat runs; backend 189 pass
 - 2026-10-19 · B · T3.8 done: endpoints 7, 8, 17, 18, 23-27 (txn list with 7 filters + detail; reports -> payee count/F7 score/rep:{vpa}/stream:reports.created, 409 ALREADY_REPORTED; reputation lookup with staff-only report list; rules CRUD with typed condition validation + rules:version reload in scoring's existing Redis round trip; models list/deploy + start-up registration; metrics overview with defined KPIs; audit log with filters + CSV (formula-injection safe)). Shared Page schema, services/lookups.py. Bugs the tests found: F7 float 0.1*7 > 0.7 (now rounded) and explain.ranked crashing when a rule's feature had no SHAP entry (T3.5, latent). End to end: 5 reports -> next payment STEP_UP with 'Payee reported by 5 users'. Backend 189 pass. Plan changes: T5.5 re-scoped, T5.8 note, 6 decision-log rows · next T3.9

@@ -1,0 +1,73 @@
+{
+  "app": {
+    "name": "FraudShield",
+    "customerName": "FraudShield Pay",
+    "tagline": "Real-time fraud protection for every payment"
+  },
+  "common": {
+    "logout": "Log out",
+    "language": "Language",
+    "theme": "Theme",
+    "light": "Light",
+    "dark": "Dark",
+    "loading": "Loading…",
+    "retry": "Try again",
+    "openMenu": "Open menu",
+    "closeMenu": "Close menu",
+    "comingSoon": "Coming soon",
+    "comingSoonBody": "This screen is part of {{task}}. The layout, sign-in and data layer are ready for it.",
+    "signedInAs": "Signed in as {{name}}",
+    "mockMode": "Demo data"
+  },
+  "roles": { "customer": "Customer", "analyst": "Analyst", "admin": "Admin", "partner": "Partner" },
+  "login": {
+    "title": "Sign in",
+    "subtitle": "Use your FraudShield account",
+    "email": "Email",
+    "password": "Password",
+    "showPassword": "Show password",
+    "hidePassword": "Hide password",
+    "submit": "Sign in",
+    "submitting": "Signing in…",
+    "demoTitle": "Demo accounts",
+    "demoHint": "Password for all: {{password}}",
+    "sidePoints": {
+      "speed": "Every payment scored in under 100 ms",
+      "explain": "Plain-language reasons for every decision",
+      "scams": "Stops scams before the money moves"
+    }
+  },
+  "nav": {
+    "main": "Monitoring",
+    "admin": "Administration",
+    "overview": "Overview",
+    "live": "Live monitor",
+    "alerts": "Alert queue",
+    "graph": "Graph explorer",
+    "payees": "Payee reputation",
+    "rules": "Rules",
+    "models": "Models",
+    "audit": "Audit log",
+    "home": "Home",
+    "pay": "Pay",
+    "report": "Report",
+    "safety": "Safety",
+    "settings": "Settings"
+  },
+  "customer": {
+    "hello": "Hello, {{name}}",
+    "protected": "Your payments are protected",
+    "protectedBody": "We check every payment for scams before your money moves."
+  },
+  "errors": {
+    "UNAUTHORIZED": "Wrong email or password.",
+    "RATE_LIMITED": "Too many attempts. Please wait a minute and try again.",
+    "NETWORK_ERROR": "Can't reach the server. Check your connection and try again.",
+    "generic": "Something went wrong. Please try again."
+  },
+  "notFound": {
+    "title": "Page not found",
+    "body": "The page you're looking for doesn't exist.",
+    "home": "Go home"
+  }
+}
