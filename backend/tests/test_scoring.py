@@ -12,7 +12,7 @@ from typing import Any
 
 import pytest
 from fastapi import FastAPI
-from httpx import ASGITransport, AsyncClient
+from httpx import ASGITransport, AsyncClient, Response
 from redis.asyncio import Redis
 from redis.exceptions import ConnectionError as RedisConnectionError
 from sqlalchemy import select
@@ -23,7 +23,9 @@ from app.main import create_app
 from app.ml_runtime.registry import ModelOutput
 from app.models import ModelScore, Payee, Transaction, User
 from app.models.enums import Decision, Language, Role
+from app.services import persist
 from app.services.decision import ActiveRule
+from app.streaming import bus
 from tests.conftest import unavailable
 
 PARTNER = {"X-API-Key": "test-partner-key"}
@@ -70,9 +72,22 @@ async def app(db_url: str) -> AsyncIterator[FastAPI]:
 
 @pytest.fixture
 async def client(app: FastAPI) -> AsyncIterator[AsyncClient]:
+    """After each scored payment, save its rows as the worker's txn_writer does in production."""
+
+    async def save_scored(response: Response) -> None:
+        if response.request.url.path == URL and response.status_code == 200:
+            await save_all_scored(app)
+
     transport = ASGITransport(app=app, raise_app_exceptions=False)
-    async with AsyncClient(transport=transport, base_url="http://test") as ac:
+    hooks = {"response": [save_scored]}
+    async with AsyncClient(transport=transport, base_url="http://test", event_hooks=hooks) as ac:
         yield ac
+
+
+async def save_all_scored(app: FastAPI) -> None:
+    redis: Redis = app.state.redis
+    for _id, fields in await redis.xrange(app.state.settings.stream_scored):
+        await persist.ensure_saved(app.state.sessionmaker, bus.decode(fields))  # idempotent
 
 
 async def make_user(

@@ -49,3 +49,4 @@ htmlcov/
 
 # Seed logins (printed once by scripts/seed.py)
 scripts/seed_credentials.local.txt
+load/data/

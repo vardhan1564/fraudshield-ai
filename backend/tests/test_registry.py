@@ -12,7 +12,7 @@ from fastapi import FastAPI
 
 from app.core.config import Settings
 from app.main import create_app, load_models_and_rules
-from app.ml_runtime.registry import ModelRegistry
+from app.ml_runtime.registry import FastMeta, ModelRegistry
 from ml.features.schema import FEATURE_NAMES
 from ml.models.meta_model import risk_score
 from ml.pipelines.datasets import Dataset
@@ -90,3 +90,21 @@ async def test_startup_loads_real_models(model_dir: Path) -> None:
     await load_models_and_rules(app, settings)
     assert isinstance(app.state.registry, ModelRegistry)
     await app.state.engine.dispose()
+
+
+def test_fast_meta_equals_sklearn(model_dir: Path) -> None:
+    """The numpy meta-model (T3.9 hot path) gives sklearn's predict_proba to 1e-12."""
+    registry = ModelRegistry.load(model_dir)
+    assert registry.fast_meta is not None
+    rng = np.random.default_rng(7)
+    x = np.column_stack([rng.random(2000), rng.random(2000), rng.random(2000),
+                         rng.choice([0.0, 0.3, 1.0], 2000)])  # fmt: skip
+    x[:10, [0, 2]] = [[0.0, 1.0]] * 10  # clipped logits at the edges
+    want = registry.meta.predict_proba(x)[:, 1]
+    names = ("txn_score", "anomaly_score", "social_eng_score", "graph_score")
+    got = [registry.fast_meta.predict(dict(zip(names, row, strict=True))) for row in x]
+    np.testing.assert_allclose(got, want, rtol=0, atol=1e-12)
+
+
+def test_fast_meta_falls_back_for_other_models() -> None:
+    assert FastMeta.of(object()) is None

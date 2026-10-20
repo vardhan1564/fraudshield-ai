@@ -43,12 +43,14 @@ Designed for a 1–2 person team: **two processes** (API + worker), **two data s
 | 7 | Update Redis counters; `XADD` to `stream:transactions.scored`; Postgres write as background task | 10 ms |
 | | **Total target** | **~60 ms**, 40 ms headroom |
 
+_(T3.9, Gate B)_ Step 7 changed: after the response the API only updates the Redis feature state and XADDs the scored event (outbox if Redis is down). The **worker** writes the `transactions` + `model_scores` rows from that event (consumer `txn_writer`, `services/persist.py`, idempotent under an advisory lock); `alert_pusher` and `llm_explainer` call `ensure_saved` first. The event carries the new transaction UUID (`id`) and every column. Scoring itself: one numpy row + one XGBoost DMatrix shared with SHAP, numpy meta-model, one math thread per prediction, predict inline (~6 ms), DB connection released right after the customer lookup, customers cached 60 s per process. Measured: 11 ms server p50 alone; Gate B p95 47 ms at 50 rps (one process, laptop); ~75 rps sustained, ~100 rps peak per process.
+
 The LLM sentence is never awaited in the request. The response carries the template sentence with `explanation_status: "pending"`; the worker's `llm_explainer` writes the LLM sentence and pushes `explanation.ready`.
 
 ## 4. Events (Redis Streams, consumer group `workers`)
 | Stream | Published by | Consumers (in worker) |
 |---|---|---|
-| `stream:transactions.scored` | scoring service | `alert_pusher` (HOLD → alert row + WS), `llm_explainer`, `graph_edges` (append edge rows) |
+| `stream:transactions.scored` | scoring service | `txn_writer` (transaction + model_scores rows, T3.9), `alert_pusher` (HOLD → alert row + WS), `llm_explainer`, `graph_edges` (append edge rows) |
 | `stream:cases.labeled` | cases API | `reputation_updater`, `retrain_collector` |
 | `stream:reports.created` | reports API | `reputation_updater` |
 

@@ -15,7 +15,7 @@ from sqlalchemy.ext.asyncio import AsyncSession, async_sessionmaker
 from app.core.config import Settings
 from app.models import Alert, Case, GraphEdge, ModelScore
 from app.models.enums import Decision, EdgeType, Language, Severity
-from app.services import notify
+from app.services import notify, persist
 from app.services.llm import ExplainRequest, Provider, explain_sentence
 
 
@@ -39,10 +39,16 @@ def severity(risk: float) -> Severity:
     return Severity.LOW
 
 
+async def txn_writer(event: dict[str, Any], deps: Deps) -> None:
+    """Every scored payment -> its transactions + model_scores rows (T3.9: moved out of the API)."""
+    await persist.ensure_saved(deps.sessionmaker, event)
+
+
 async def alert_pusher(event: dict[str, Any], deps: Deps) -> None:
     """HOLD -> one alert and its case (once per transaction) + `alert.created` to analysts."""
     if event["decision"] != Decision.HOLD.value:
         return
+    await persist.ensure_saved(deps.sessionmaker, event)  # the alert's row may not exist yet
     txn_pk = uuid.UUID(event["id"])
     async with deps.sessionmaker() as session:
         found = (
@@ -89,6 +95,7 @@ async def llm_explainer(event: dict[str, Any], deps: Deps) -> None:
         language=language,
     )
     text, _provider = await explain_sentence(req, deps.llm_chain, deps.settings.llm_timeout_ms)
+    await persist.ensure_saved(deps.sessionmaker, event)  # the row the sentence goes into
     async with deps.sessionmaker() as session:
         await session.execute(
             update(ModelScore)

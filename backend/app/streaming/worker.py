@@ -26,7 +26,14 @@ from app.core.logging import setup_logging
 from app.core.redis import make_redis
 from app.services.llm import build_chain
 from app.streaming import bus
-from app.streaming.consumers import Deps, Handler, alert_pusher, graph_edges, llm_explainer
+from app.streaming.consumers import (
+    Deps,
+    Handler,
+    alert_pusher,
+    graph_edges,
+    llm_explainer,
+    txn_writer,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -48,6 +55,7 @@ class Consumer:
 def consumers(settings: Settings) -> list[Consumer]:
     scored = settings.stream_scored
     return [
+        Consumer("txn_writer", scored, txn_writer),
         Consumer("alert_pusher", scored, alert_pusher),
         Consumer("llm_explainer", scored, llm_explainer),
         Consumer("graph_edges", scored, graph_edges),

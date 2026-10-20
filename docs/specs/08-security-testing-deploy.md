@@ -33,6 +33,7 @@ Jobs: `python-lint` (ruff, mypy) → `python-test` (pytest with services: postgr
 ## 4. Deploy (demo)
 - Build web (`npm run build`) → served by Nginx (dashboard and customer app in one build).
 - One backend image `backend/Dockerfile` (python:3.11-slim) used twice: `api` (uvicorn, 2 workers) and `worker` (`python -m app.streaming.worker`).
+- _(T3.9)_ Gate B was measured on a Windows dev laptop with **one** uvicorn process (Windows forces the selector loop and pins kept-alive connections to one worker with `--workers`). Re-measure on the Linux image with 2 workers at deploy. Load test: `load/prepare.py` (separate `fraudshield_load` DB + Redis db 2), `load/locustfile.py` (Poisson arrivals, 30 s warm-up, 2 min at 50 rps, ramp +25/30 s), `load/analyze.py`. Redis runs AOF only (`--save ""`): RDB snapshots on top forked Redis every minute under load.
 - `infra/docker-compose.prod.yml`: nginx, api, worker, postgres, redis on one VM (2 vCPU / 4 GB is enough) or Render.
 - Models copied into image from `ml/artifacts` at build time.
 - Grafana dashboard JSON in `infra/grafana/dashboards/`.

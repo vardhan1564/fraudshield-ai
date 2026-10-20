@@ -14,7 +14,6 @@ from collections import defaultdict
 from typing import Any
 
 import numpy as np
-import pandas as pd
 import xgboost as xgb
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -25,11 +24,10 @@ from app.models.enums import Decision, Language, Role
 from app.schemas.transactions import ExplainResponse, Reason
 from app.services.lookups import by_ref
 from app.services.reason_map import phrase
-from ml.features.schema import DTYPES, FEATURE_NAMES
+from ml.features.schema import FEATURE_NAMES
 from ml.models import social_model
 from ml.models.meta_model import SCORE_COLUMNS, BaseModels
 
-CATEGORICAL = {n for n, d in DTYPES.items() if d == "category"}
 SHAP_MODELS = {"txn_model": "txn_score", "social_model": "social_eng_score"}
 STORED = 10  # spec 03 §7: top 10 per scored payment in model_scores.shap_json
 TOP_MIN, TOP_MAX = 3, 5  # spec 01 F4: 3-5 reasons
@@ -50,30 +48,19 @@ def meta_weights(meta: Any) -> dict[str, float]:
     return {column: float(w) for column, w in zip(SCORE_COLUMNS, mean, strict=True)}
 
 
-def tree_shap(base: BaseModels, X: pd.DataFrame) -> dict[str, dict[str, float]]:
-    """Per-model TreeSHAP for one row (log-odds; the bias term is dropped)."""
-    txn = base.txn.predict(_dmatrix(X), pred_contribs=True)[0]
-    social_in = social_model._frame(X).assign(coach_red_flags=0.0)  # as in BaseModels.scores
-    social = np.asarray(base.social.predict(social_in, pred_contrib=True))[0]
+def tree_shap(
+    base: BaseModels, dmatrix: xgb.DMatrix, social_in: np.ndarray
+) -> dict[str, dict[str, float]]:
+    """Per-model TreeSHAP for one row (log-odds; the bias term is dropped). Takes the inputs the
+    registry already built for scoring, so nothing is converted twice."""
+    txn = base.txn.predict(dmatrix, pred_contribs=True)[0]
+    social = np.asarray(base.social.predict(social_in, pred_contrib=True, num_threads=1))[0]
     return {
         "txn_model": dict(zip(FEATURE_NAMES, map(float, txn[:-1]), strict=True)),
         "social_model": dict(
             zip(social_model.SOCIAL_FEATURES, map(float, social[:-1]), strict=True)
         ),
     }
-
-
-def _dmatrix(X: pd.DataFrame) -> xgb.DMatrix:
-    """One row as numbers (category -> code): same values as the pandas route, about half the
-    time, and nthread=1 because starting threads costs more than it saves for one row."""
-    row = [X[n].cat.codes.iloc[0] if n in CATEGORICAL else X[n].iloc[0] for n in FEATURE_NAMES]
-    return xgb.DMatrix(
-        np.asarray([row], dtype="float32"),  # XGBoost works in float32 anyway
-        feature_names=FEATURE_NAMES,
-        feature_types=["c" if n in CATEGORICAL else "float" for n in FEATURE_NAMES],
-        enable_categorical=True,
-        nthread=1,
-    )
 
 
 def combine(shap: dict[str, dict[str, float]], weights: dict[str, float]) -> dict[str, float]:

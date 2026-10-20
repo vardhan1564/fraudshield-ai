@@ -1,0 +1,4 @@
+# Load testing (T3.9) only; not needed by the app or CI.
+# Install: pip install -r load/requirements.txt
+locust==2.46.7
+py-spy==0.4.2

@@ -4,8 +4,8 @@
 > Note format: `YYYY-MM-DD · A/B · one-line result · next step`
 
 ## Current status
-- **Phase:** P3 Backend
-- **Next task:** T3.9 Load test, Gate B (B)
+- **Phase:** P4 Front ends
+- **Next task:** T4.1 Web scaffold, shared layer, login (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none (close Chrome before IEEE runs: the laptop is short of memory)
 
@@ -13,7 +13,7 @@
 - [x] P0 gate: infra up + `/api/v1/health` 200
 - [x] P1 gate: simulator + feature tests pass
 - [x] **Gate A**: UPI risk_score PR-AUC > 0.80 + IEEE-CIS PR-AUC ≥ 0.50 (re-based 2026-10-18)
-- [ ] **Gate B**: p95 < 100 ms @ 50 rps
+- [x] **Gate B**: p95 < 100 ms @ 50 rps (47 ms, 2026-10-20)
 - [ ] **Gate C**: digital-arrest demo end to end
 - [ ] Final: 3 clean demo runs
 
@@ -46,7 +46,7 @@
 - [x] T3.6 Worker: Redis Streams + jobs · A
 - [x] T3.7 Alerts, cases, WebSockets · B
 - [x] T3.8 Remaining business APIs · B
-- [ ] T3.9 Load test (Gate B) · B
+- [x] T3.9 Load test (Gate B) · B
 
 ### P4 Front ends (Weeks 6–9)
 - [ ] T4.1 Web scaffold, shared layer, login · B
@@ -93,9 +93,13 @@
 | 2026-10-19 | Rule changes reach all API processes via Redis `rules:version`, read in scoring's existing round trip | No extra Redis call per payment, no listener |
 | 2026-10-19 | Model deploy only for the loaded version until T5.8 hot reload | Never mark a model active that isn't serving |
 | 2026-10-19 | One report per customer per payee | One person can't push a payee over the 5-report line |
+| 2026-10-20 | The worker writes each scored payment to Postgres (txn_writer), not the API after the response | The save was ~40% of the API's CPU per payment on its event loop; Gate B needed the headroom |
+| 2026-10-20 | Gate B measured with Poisson arrivals after a 30 s warm-up, one uvicorn process, High performance power plan | constant_throughput fired 50 payers in lockstep; Windows `--workers` forces the selector loop; Power saver tripled latency |
+| 2026-10-20 | Redis: AOF only (`--save ""`) | RDB snapshots on top of AOF forked Redis every minute under load and stalled it |
 
 ## Notes
 <!-- newest first -->
+- 2026-10-20 · B · T3.9 done, **Gate B PASS: p95 47 ms at 50.5 rps for 2 min, 0 errors** (server p95 34 ms); max ~75 rps sustained (p95 63 ms), ~100 rps peak, one process on this laptop. load/prepare.py (separate fraudshield_load DB + Redis db 2), locustfile (Poisson, warm-up, ramp), analyze.py; report in load/reports/gate_b_2026-10-20.md (git-ignored). Fixes, each found by measurement: DB connection released before the models (pool exhausted); numpy fast path in the registry (54 -> 5.8 ms, FastMeta = sklearn to 1e-12); post-response save moved to the worker (txn_writer, services/persist.py, exactly-once test); one math thread per prediction; 60 s customer cache; Redis --save "". Laptop factors (not code): Windows Power saver tripled latency (use High performance when measuring), < 1 GB free RAM causes paging spikes. Production (2 workers, Linux) to be re-measured at deploy · next T4.1
 - 2026-10-19 · B · fix: CI run 39266584336 failed test_ws end-to-end (CancelledError on WebSocket close; ~1 in 8 locally). The relay's clean-up (unsubscribe, close pub/sub) could be cancelled half way when the client's close raced it: now shielded (anyio), which also stops leaking a Redis connection per dropped client. Also fixed: token-expiry check ran after cancelling the tasks, so every server-side close said 1008. 32 clean repeat runs; backend 189 pass
 - 2026-10-19 · B · T3.8 done: endpoints 7, 8, 17, 18, 23-27 (txn list with 7 filters + detail; reports -> payee count/F7 score/rep:{vpa}/stream:reports.created, 409 ALREADY_REPORTED; reputation lookup with staff-only report list; rules CRUD with typed condition validation + rules:version reload in scoring's existing Redis round trip; models list/deploy + start-up registration; metrics overview with defined KPIs; audit log with filters + CSV (formula-injection safe)). Shared Page schema, services/lookups.py. Bugs the tests found: F7 float 0.1*7 > 0.7 (now rounded) and explain.ranked crashing when a rule's feature had no SHAP entry (T3.5, latent). End to end: 5 reports -> next payment STEP_UP with 'Payee reported by 5 users'. Backend 189 pass. Plan changes: T5.5 re-scoped, T5.8 note, 6 decision-log rows · next T3.9
 - 2026-10-19 · B · T3.7 done: GET /alerts (open+assigned, severity then oldest, paged), GET/PATCH /cases/{id} (status on the alert, label+notes on the case, assign, closing needs a label; audit row with changed fields; new label -> stream:cases.labeled via bus.publish in the same transaction; case.updated pushed after commit). /api/v1/ws/alerts and /ws/customer relay Redis pub/sub (subscribe before accept, 1008 on bad token/role, close at token expiry). Worker now creates the case with the alert; alert.created has case_id. services/audit.py record() used by case updates and auth register/login/login_failed (spec 08). Tests: starlette TestClient with the real worker on the app loop: HOLD -> alert.created on /ws/alerts < 1 s, LLM sentence on /ws/customer, customers only get their own channel; backend 150 pass. Follow-up: rule changes / model deploys get audit rows when T4.7/T5.8 add them · next T3.8
