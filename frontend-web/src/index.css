@@ -87,6 +87,14 @@
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);
   --radius-xl: calc(var(--radius) + 4px);
+  /* A new live-feed row: a brief tint that fades out (reduced motion makes it instant). */
+  --animate-row-in: row-in 1.6s ease-out;
+}
+
+@keyframes row-in {
+  from {
+    background-color: color-mix(in oklch, var(--primary) 16%, transparent);
+  }
 }
 
 @layer base {

@@ -5,7 +5,16 @@
  */
 import { http, HttpResponse, ws } from "msw";
 
-import { alertOf, CASES, decisionFor, metrics, reasonsFor, TRANSACTIONS, USERS } from "@/mocks/data";
+import {
+  alertOf,
+  CASES,
+  decisionFor,
+  metrics,
+  newPayment,
+  reasonsFor,
+  TRANSACTIONS,
+  USERS,
+} from "@/mocks/data";
 import { API_URL } from "@/shared/api/client";
 import { WS_URL } from "@/shared/api/ws";
 import { DEMO_PASSWORD } from "@/shared/lib/demo";
@@ -83,8 +92,25 @@ function needUser(request: Request, roles?: string[]) {
 
 // --- live updates -----------------------------------------------------------------------------
 
-const alertsLink = ws.link(`${WS_URL}/alerts`);
+export const alertsLink = ws.link(`${WS_URL}/alerts`);
 const customerLink = ws.link(`${WS_URL}/customer`);
+
+/** The worker's `alert.created` for a HOLD payment (spec 04 §3). */
+export function alertCreated(txn: TxnDetail): AlertCreatedMessage {
+  const found = CASES.find((c) => c.transaction.id === txn.id);
+  return {
+    type: "alert.created",
+    data: {
+      alert_id: found?.alert_id ?? "",
+      case_id: found?.case_id ?? "",
+      txn_id: txn.txn_id,
+      risk_score: txn.risk_score ?? 0.8,
+      decision: "HOLD",
+      top_reasons: txn.top_reasons,
+      created_at: found?.created_at ?? txn.ts,
+    },
+  };
+}
 
 export const handlers = [
   http.post(url("/auth/login"), async ({ request }) => {
@@ -151,8 +177,13 @@ export const handlers = [
   http.get(url("/transactions"), ({ request }) => {
     const auth = needUser(request, ["analyst", "admin"]);
     if (auth.error) return auth.error;
-    const decision = new URL(request.url).searchParams.get("decision");
-    const items = TRANSACTIONS.filter((t) => !decision || t.decision === decision).map(toItem);
+    const params = new URL(request.url).searchParams;
+    const decision = params.get("decision");
+    const from = params.get("from");
+    const items = TRANSACTIONS.filter((t) => !decision || t.decision === decision)
+      .filter((t) => !from || Date.parse(t.ts) >= Date.parse(from))
+      .sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts))
+      .map(toItem);
     return HttpResponse.json(page(items, request));
   }),
 
@@ -175,7 +206,11 @@ export const handlers = [
   http.get(url("/alerts"), ({ request }) => {
     const auth = needUser(request, ["analyst"]);
     if (auth.error) return auth.error;
-    return HttpResponse.json(page(CASES.filter((c) => c.status !== "closed").map(alertOf), request));
+    const rank = { high: 3, medium: 2, low: 1 };
+    const open = CASES.filter((c) => c.status !== "closed").sort(
+      (a, b) => rank[b.severity] - rank[a.severity] || Date.parse(a.created_at) - Date.parse(b.created_at),
+    ); // most severe first, then oldest (spec 04)
+    return HttpResponse.json(page(open.map(alertOf), request));
   }),
 
   http.get(url("/cases/:id"), ({ request, params }) => {
@@ -244,25 +279,14 @@ export const handlers = [
   }),
 
   alertsLink.addEventListener("connection", ({ client }) => {
-    // A new HOLD every 15 s, like the worker's alert.created.
-    const timer = setInterval(() => {
-      const c = CASES[Math.floor(Math.random() * CASES.length)];
-      if (!c) return;
-      const message: AlertCreatedMessage = {
-        type: "alert.created",
-        data: {
-          alert_id: c.alert_id,
-          case_id: c.case_id,
-          txn_id: c.transaction.txn_id,
-          risk_score: c.transaction.risk_score ?? 0.8,
-          decision: "HOLD",
-          top_reasons: c.top_reasons,
-          created_at: new Date().toISOString(),
-        },
-      };
-      client.send(JSON.stringify(message));
-    }, 15_000);
-    client.addEventListener("close", () => clearInterval(timer));
+    // While an analyst is watching: a payment every 2.5 s (seen by polling /transactions) and a
+    // HOLD every 15 s pushed as alert.created, like the worker.
+    const payments = setInterval(() => newPayment(false), 2_500);
+    const holds = setInterval(() => client.send(JSON.stringify(alertCreated(newPayment(true)))), 15_000);
+    client.addEventListener("close", () => {
+      clearInterval(payments);
+      clearInterval(holds);
+    });
   }),
 
   customerLink.addEventListener("connection", () => undefined),

@@ -5,7 +5,7 @@
 
 ## Current status
 - **Phase:** P4 Front ends
-- **Next task:** T4.3 Dashboard: Live Monitor + Alert Queue (B)
+- **Next task:** T4.4 Dashboard: Case Detail (B)
 - **Team:** A = ______ · B = ______ (solo: same person)
 - **Blockers:** none (close Chrome before IEEE runs: the laptop is short of memory)
 
@@ -51,7 +51,7 @@
 ### P4 Front ends (Weeks 6–9)
 - [x] T4.1 Web scaffold, shared layer, login · B
 - [x] T4.2 Dashboard: Overview · B
-- [ ] T4.3 Dashboard: Live Monitor + Alert Queue · B
+- [x] T4.3 Dashboard: Live Monitor + Alert Queue · B
 - [ ] T4.4 Dashboard: Case Detail · B
 - [ ] T4.5 Customer app: shell, Home, Pay, Risk Warning · B
 - [ ] T4.6 Customer app: Report Fraud · B
@@ -101,6 +101,7 @@
 
 ## Notes
 <!-- newest first -->
+- 2026-10-21 · B · T4.3 done: Live Monitor (HOLDs over /ws/alerts + GET /transactions/{id}, other payments polled every 3 s, 200-row cap, decision/channel filters, pause with 'n new' count, Live/Reconnecting chip, Open case link) and Alert Queue (all/unassigned/mine, sortable, optimistic assign-to-me, SLA countdown 15 min/1 h/4 h). **Done-when met:** real API + worker, Chrome: scored HOLD visible in 195-480 ms (8/8); alert.created 50-222 ms over 20 runs (first alert after a cold worker start 1.1 s). Checked desktop, tablet, phone (no page side-scroll), dark, Hindi, Marathi, 0 console errors. Fix: RiskBadge label was hard-coded English, now translated + RiskBadge test (spec 06 §5). Web tests 51, tsc/eslint 0, build OK. Spec 06 note: §4 'any row within 1 s' only holds for HOLDs (others ride the 3 s poll), edit proposed. Follow-ups: dev Redis still holds 18 Oct BENCH events in the old format; on restart the worker made 178 BENCH alerts without reasons and graph_edges dead-letters them (KeyError account_id): clear in the T6.4 demo reset; Alert Queue at 1280 px scrolls inside its card in Hindi · next T4.4
 - 2026-10-20 · B · T4.2 done: Overview page (5 KpiCards, hourly volume + flagged as two synced small charts on one axis, fraud-by-type bars, top-10 city table, 24h/7d/30d presets, Chart/Table toggle on every chart, skeleton/empty/error states, 30 s refresh keeping the frame). Recharts 3; chart colours validated with the dataviz palette checks (blue/teal, ΔE ≥ 15.5 CVD and ≥ 16.2 normal in light and dark; slate+teal failed). Done-when met: on the 109,416-payment load DB, production build, real API, Power saver: full reload to KPIs+charts p50 1.0 s / max 1.09 s (< 1.5 s), range switch ~0.6 s. Needed a backend fix: /metrics/overview 4 scans -> 2 (ROLLUP + GROUPING SETS), p50 800 -> 340 ms on 7 days; numbers unchanged (tests). Screenshot fixes: uneven y ticks (niceTicks), clipped 23:00 and bar labels, double tooltip, lone 5th KPI on tablet, hidden 0 tick. Tests: KpiCard 5, Overview page 5 (data, table view, over budget, empty, error + retry), niceTicks 3; web 27, backend 192. Note for T6.4: the seed has no payments, so a fresh setup shows the empty Overview; add demo payments to the demo kit · next T4.3
 - 2026-10-20 · B · T4.1 done: frontend-web scaffold (Vite 8, React 18, TS strict, Tailwind 4, shadcn-style ui, TanStack Query, React Router 7, i18next en/hi/mr with type-checked keys, MSW 2). Shared layer: api/client.ts (bearer + one shared refresh for parallel 401s, ApiError from {error}), endpoints/*.ts, ws.ts (auto-reconnect, fresh token after 1008), types/api.ts = spec 04, lib/format.ts (₹ lakh grouping, masks, IST), riskColor.ts. /login redirects analysts/admins to /dashboard and customers to /app (RequireAuth per role); responsive dashboard layout (drawer < 1024 px) and customer PhoneFrame + BottomNav; light/dark theme. `npm run dev:mock` = MSW mocks of the P0 endpoints + WS. Tests 14 (refresh-once, rejected refresh logs out, error mapping, formats, risk bands, login redirects, i18n); tsc 0, eslint 0, build OK; checked visually in Chrome (desktop, tablet drawer, phone, dark, Hindi), 0 console errors. Bugs fixed on the way: refresh skipped for /auth/me, maskPhone re-masked API-masked phones. Follow-ups: spec 07 Home calls /transactions?mine=true but GET /transactions is staff-only -> add a customer 'my payments' endpoint in T4.5; web CI job in T6.1 · next T4.2
 - 2026-10-20 · B · T3.9 done, **Gate B PASS: p95 47 ms at 50.5 rps for 2 min, 0 errors** (server p95 34 ms); max ~75 rps sustained (p95 63 ms), ~100 rps peak, one process on this laptop. load/prepare.py (separate fraudshield_load DB + Redis db 2), locustfile (Poisson, warm-up, ramp), analyze.py; report in load/reports/gate_b_2026-10-20.md (git-ignored). Fixes, each found by measurement: DB connection released before the models (pool exhausted); numpy fast path in the registry (54 -> 5.8 ms, FastMeta = sklearn to 1e-12); post-response save moved to the worker (txn_writer, services/persist.py, exactly-once test); one math thread per prediction; 60 s customer cache; Redis --save "". Laptop factors (not code): Windows Power saver tripled latency (use High performance when measuring), < 1 GB free RAM causes paging spikes. Production (2 workers, Linux) to be re-measured at deploy · next T4.1

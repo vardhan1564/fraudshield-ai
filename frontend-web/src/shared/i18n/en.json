@@ -136,5 +136,96 @@
     "card_testing": "Card testing",
     "mule_ring": "Mule ring",
     "unknown": "Not labelled"
+  },
+  "decisions": {
+    "APPROVE": "Approved",
+    "STEP_UP": "Extra check",
+    "HOLD": "Held"
+  },
+  "severity": {
+    "high": "High",
+    "medium": "Medium",
+    "low": "Low"
+  },
+  "channels": {
+    "UPI": "UPI",
+    "CARD": "Card",
+    "WALLET": "Wallet"
+  },
+  "connection": {
+    "open": "Live",
+    "connecting": "Connecting…",
+    "reconnecting": "Reconnecting…",
+    "closed": "Offline",
+    "hint": "Held payments arrive instantly; other payments every {{seconds}} s"
+  },
+  "live": {
+    "filters": {
+      "decision": "Decision",
+      "channel": "Channel",
+      "all": "All"
+    },
+    "pause": "Pause",
+    "resume": "Resume",
+    "newWhilePaused_one": "{{count}} new payment",
+    "newWhilePaused_other": "{{count}} new payments",
+    "paused": "Paused: the list is frozen so you can read it",
+    "showing": "Showing {{shown}} payments · keeps the newest {{limit}}",
+    "col": {
+      "time": "Time",
+      "txn": "Payment",
+      "customer": "Customer",
+      "payee": "Payee",
+      "amount": "Amount",
+      "channel": "Channel",
+      "risk": "Risk",
+      "decision": "Decision",
+      "latency": "Scored in"
+    },
+    "openCase": "Open case",
+    "empty": "Waiting for payments",
+    "emptyBody": "New payments appear here as soon as they are scored.",
+    "noMatch": "No payments match these filters",
+    "clearFilters": "Clear filters",
+    "error": "Couldn’t load recent payments",
+    "staleError": "Couldn’t refresh. Showing the last payments; trying again."
+  },
+  "alerts": {
+    "view": {
+      "label": "Show",
+      "all": "All open",
+      "unassigned": "Unassigned",
+      "mine": "Assigned to me"
+    },
+    "count_one": "{{count}} open alert",
+    "count_other": "{{count}} open alerts",
+    "col": {
+      "severity": "Severity",
+      "txn": "Payment",
+      "amount": "Amount",
+      "risk": "Risk",
+      "reason": "Main reason",
+      "age": "Waiting",
+      "sla": "SLA",
+      "owner": "Owner"
+    },
+    "sortBy": "Sort by {{column}}",
+    "sla": {
+      "ok": "{{time}} left",
+      "soon": "Due soon · {{time}} left",
+      "overdue": "Overdue by {{time}}",
+      "rule": "Pick up within: high 15 min, medium 1 h, low 4 h"
+    },
+    "assignToMe": "Assign to me",
+    "assigning": "Assigning…",
+    "you": "You",
+    "someoneElse": "Another analyst",
+    "assignFailed": "Couldn’t assign the alert: {{message}}",
+    "open": "Open",
+    "empty": "No open alerts",
+    "emptyBody": "Held payments land here for review. You’re all caught up.",
+    "emptyMine": "Nothing assigned to you",
+    "emptyUnassigned": "Every alert has an owner",
+    "error": "Couldn’t load the alert queue"
   }
 }

@@ -1,7 +1,7 @@
-import { cn } from "@/shared/lib/cn";
-import { RISK_CLASSES, riskLevel, type RiskLevel } from "@/shared/lib/riskColor";
+import { useTranslation } from "react-i18next";
 
-const LABELS: Record<RiskLevel, string> = { low: "Low", medium: "Medium", high: "High" };
+import { cn } from "@/shared/lib/cn";
+import { RISK_CLASSES, riskLevel } from "@/shared/lib/riskColor";
 
 /** Colour + text, never colour alone (spec 06 §2). Analysts see the score; customers never do. */
 export function RiskBadge({
@@ -13,6 +13,7 @@ export function RiskBadge({
   showScore?: boolean;
   className?: string;
 }) {
+  const { t } = useTranslation();
   const level = riskLevel(score);
   const classes = RISK_CLASSES[level];
   return (
@@ -24,7 +25,7 @@ export function RiskBadge({
       )}
     >
       <span className={cn("size-1.5 rounded-full", classes.dot)} aria-hidden="true" />
-      {LABELS[level]}
+      {t(`severity.${level}`)}
       {showScore && <span className="font-medium tabular-nums opacity-80">{score.toFixed(2)}</span>}
     </span>
   );

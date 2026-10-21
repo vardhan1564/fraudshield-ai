@@ -6,6 +6,7 @@ import {
   formatInr,
   formatNumber,
   formatPercent,
+  formatTime,
   maskPhone,
   maskVpa,
 } from "@/shared/lib/format";
@@ -29,8 +30,10 @@ describe("format", () => {
 
   it("shows dates in IST and durations and percents", () => {
     expect(formatDateTime("2026-10-15T20:44:05Z")).toMatch(/16 Oct.*02:14/);
+    expect(formatTime("2026-10-15T20:44:05Z")).toMatch(/02:14:05/);
     expect(formatDuration(245)).toBe("4m 05s");
     expect(formatDuration(9)).toBe("9s");
+    expect(formatDuration(3 * 3600 + 5 * 60 + 40)).toBe("3h 05m");
     expect(formatPercent(0.0064, 2)).toBe("0.64%");
   });
 });

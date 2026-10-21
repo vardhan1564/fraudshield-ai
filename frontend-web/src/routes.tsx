@@ -5,29 +5,35 @@ import { HomePage } from "@/customer/pages/HomePage";
 import { SettingsPage } from "@/customer/pages/SettingsPage";
 import { DashboardLayout } from "@/dashboard/layout/DashboardLayout";
 import { ALL_NAV } from "@/dashboard/layout/nav";
+import { AlertQueuePage } from "@/dashboard/pages/AlertQueuePage";
 import { ComingSoonPage } from "@/dashboard/pages/ComingSoonPage";
+import { LiveMonitorPage } from "@/dashboard/pages/LiveMonitorPage";
 import { OverviewPage } from "@/dashboard/pages/OverviewPage";
 import { CustomerPlaceholder, RootRedirect } from "@/routeElements";
 import { RequireAuth } from "@/shared/components/RequireAuth";
 import { LoginPage } from "@/shared/pages/LoginPage";
 import { NotFoundPage } from "@/shared/pages/NotFoundPage";
 
+const BUILT = new Set(["/dashboard", "/dashboard/live", "/dashboard/alerts"]);
+
 export const routes: RouteObject[] = [
   { path: "/", element: <RootRedirect /> },
   { path: "/login", element: <LoginPage /> },
   {
-    // Analyst and admin dashboard (spec 06). Placeholders until T4.2-T4.7 / T5.3.
+    // Analyst and admin dashboard (spec 06). Placeholders until T4.4-T4.7 / T5.3.
     element: <RequireAuth roles={["analyst", "admin"]} />,
     children: [
       {
         path: "/dashboard",
         element: <DashboardLayout />,
         children: [
-          ...ALL_NAV.map((item) =>
-            item.to === "/dashboard"
-              ? { index: true, element: <OverviewPage /> }
-              : { path: item.to.replace("/dashboard/", ""), element: <ComingSoonPage task={item.task} /> },
-          ),
+          { index: true, element: <OverviewPage /> },
+          { path: "live", element: <LiveMonitorPage /> },
+          { path: "alerts", element: <AlertQueuePage /> },
+          ...ALL_NAV.filter((item) => !BUILT.has(item.to)).map((item) => ({
+            path: item.to.replace("/dashboard/", ""),
+            element: <ComingSoonPage task={item.task} />,
+          })),
           { path: "cases/:caseId", element: <ComingSoonPage task="T4.4" /> },
         ],
       },

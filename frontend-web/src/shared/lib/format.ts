@@ -75,9 +75,24 @@ export function formatDateTime(iso: string): string {
   return istDateTime.format(new Date(iso));
 }
 
-/** Seconds -> "4m 05s" (cooling-off timers, SLA). */
+const istTime = new Intl.DateTimeFormat("en-IN", {
+  timeZone: "Asia/Kolkata",
+  hour: "2-digit",
+  minute: "2-digit",
+  second: "2-digit",
+  hour12: true,
+});
+
+/** ISO timestamp -> "02:14:05 am" in IST (live feeds, where the day is today). */
+export function formatTime(iso: string): string {
+  return istTime.format(new Date(iso));
+}
+
+/** Seconds -> "4m 05s", "2h 05m" from an hour up (cooling-off timers, SLA). */
 export function formatDuration(totalSeconds: number): string {
   const s = Math.max(0, Math.round(totalSeconds));
+  const h = Math.floor(s / 3600);
+  if (h > 0) return `${h}h ${String(Math.floor((s % 3600) / 60)).padStart(2, "0")}m`;
   const m = Math.floor(s / 60);
   return m > 0 ? `${m}m ${String(s % 60).padStart(2, "0")}s` : `${s}s`;
 }

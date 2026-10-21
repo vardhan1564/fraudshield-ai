@@ -106,35 +106,68 @@ export const TRANSACTIONS: TxnDetail[] = Array.from({ length: 48 }, (_, i) => {
   };
 });
 
-export const CASES: CaseDetail[] = TRANSACTIONS.filter((t) => t.decision === "HOLD").map((t, i) => ({
-  case_id: uuid(8000 + i),
-  alert_id: uuid(7000 + i),
-  severity: (t.risk_score ?? 0) >= 0.9 ? "high" : "medium",
-  status: i === 0 ? "assigned" : "open",
-  assigned_to: i === 0 ? (USERS[0]?.id ?? null) : null,
-  label: null,
-  notes: null,
-  resolved_by: null,
-  resolved_at: null,
-  created_at: t.ts,
-  transaction: {
-    id: t.id,
-    txn_id: t.txn_id,
-    amount: t.amount,
-    currency: t.currency,
-    channel: t.channel,
-    merchant_category: t.merchant_category,
-    payee_vpa: t.payee_vpa,
-    risk_score: t.risk_score,
-    decision: t.decision,
-    action: t.action,
-    model_version: t.model_version,
-    ts: t.ts,
-    customer: { id: t.user_id, external_id: t.customer_external_id, name: "Ravi Kumar", phone: "98xxxxxx21" },
-  },
-  top_reasons: t.top_reasons,
-  explanation: t.explanation,
-}));
+function severityOf(risk: number): CaseDetail["severity"] {
+  return risk >= 0.9 ? "high" : risk >= 0.75 ? "medium" : "low";
+}
+
+function caseFor(t: TxnDetail, n: number, createdAt: string, assignedTo: string | null): CaseDetail {
+  return {
+    case_id: uuid(8000 + n),
+    alert_id: uuid(7000 + n),
+    severity: severityOf(t.risk_score ?? 0),
+    status: assignedTo ? "assigned" : "open",
+    assigned_to: assignedTo,
+    label: null,
+    notes: null,
+    resolved_by: null,
+    resolved_at: null,
+    created_at: createdAt,
+    transaction: {
+      id: t.id,
+      txn_id: t.txn_id,
+      amount: t.amount,
+      currency: t.currency,
+      channel: t.channel,
+      merchant_category: t.merchant_category,
+      payee_vpa: t.payee_vpa,
+      risk_score: t.risk_score,
+      decision: t.decision,
+      action: t.action,
+      model_version: t.model_version,
+      ts: t.ts,
+      customer: { id: t.user_id, external_id: t.customer_external_id, name: "Ravi Kumar", phone: "98xxxxxx21" },
+    },
+    top_reasons: t.top_reasons,
+    explanation: t.explanation,
+  };
+}
+
+/** Alerts raised 3 min to ~2.5 h ago, so the queue shows every SLA state; the first is the analyst's. */
+export const CASES: CaseDetail[] = TRANSACTIONS.filter((t) => t.decision === "HOLD").map((t, i) =>
+  caseFor(t, i, new Date(now - (i * i * 6 + 3) * 60_000).toISOString(), i === 0 ? (USERS[0]?.id ?? null) : null),
+);
+
+let liveCount = 0;
+
+/**
+ * A payment scored just now (live mocks, T4.3), copied from a demo payment with the same decision
+ * kind. A HOLD also gets its alert and case, as the worker would create them.
+ */
+export function newPayment(hold: boolean): TxnDetail {
+  liveCount += 1;
+  const template = pick(TRANSACTIONS.filter((t) => (t.decision === "HOLD") === hold));
+  const ts = new Date().toISOString();
+  const txn: TxnDetail = {
+    ...template,
+    id: uuid(20_000 + liveCount),
+    txn_id: `TXN-LIVE-${String(liveCount).padStart(5, "0")}`,
+    amount: Math.round(template.amount * (0.6 + rand() * 0.8) * 100) / 100,
+    ts,
+  };
+  TRANSACTIONS.unshift(txn);
+  if (hold) CASES.unshift(caseFor(txn, 1000 + liveCount, ts, null));
+  return txn;
+}
 
 export function alertOf(c: CaseDetail): AlertItem {
   return {
