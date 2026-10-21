@@ -2,16 +2,20 @@
 
 import numpy as np
 import pandas as pd
+from numpy.typing import NDArray
 
 EARTH_RADIUS_KM = 6371.0
 
 
-def haversine_km(lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: pd.Series) -> np.ndarray:
+def haversine_km(
+    lat1: pd.Series, lon1: pd.Series, lat2: pd.Series, lon2: pd.Series
+) -> NDArray[np.float64]:
     p1, p2 = np.radians(lat1.to_numpy(float)), np.radians(lat2.to_numpy(float))
     dlat = p2 - p1
     dlon = np.radians(lon2.to_numpy(float) - lon1.to_numpy(float))
     a = np.sin(dlat / 2) ** 2 + np.cos(p1) * np.cos(p2) * np.sin(dlon / 2) ** 2
-    return 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
+    distance: NDArray[np.float64] = 2 * EARTH_RADIUS_KM * np.arcsin(np.sqrt(a))
+    return distance
 
 
 def device_features(txns: pd.DataFrame, users: pd.DataFrame, devices: pd.DataFrame) -> pd.DataFrame:
