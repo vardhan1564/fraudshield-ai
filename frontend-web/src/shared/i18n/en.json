@@ -17,7 +17,8 @@
     "comingSoon": "Coming soon",
     "comingSoonBody": "This screen is part of {{task}}. The layout, sign-in and data layer are ready for it.",
     "signedInAs": "Signed in as {{name}}",
-    "mockMode": "Demo data"
+    "mockMode": "Demo data",
+    "close": "Close"
   },
   "roles": {
     "customer": "Customer",
@@ -227,5 +228,93 @@
     "emptyMine": "Nothing assigned to you",
     "emptyUnassigned": "Every alert has an owner",
     "error": "Couldn’t load the alert queue"
+  },
+  "case": {
+    "title": "Case detail",
+    "backToQueue": "Alert queue",
+    "raised": "Raised {{time}}",
+    "notFound": "Case not found",
+    "notFoundBody": "It may have been removed, or the link is wrong.",
+    "error": "Could not load this case",
+    "status": {
+      "open": "Open",
+      "assigned": "Assigned",
+      "closed": "Closed"
+    },
+    "payment": {
+      "title": "Payment",
+      "to": "to {{payee}}",
+      "customer": "Customer",
+      "phone": "Phone",
+      "time": "Time",
+      "channel": "Channel",
+      "category": "Category",
+      "action": "Action taken",
+      "txnId": "Payment ID",
+      "model": "Model"
+    },
+    "explanation": {
+      "title": "Why it was held",
+      "updated": "Updated just now",
+      "pending": "The plain-language explanation is being written…",
+      "reasons": "Top reasons"
+    },
+    "shap": {
+      "title": "What drove the score",
+      "subtitle": "The 10 biggest pushes, in model log-odds; each bar starts where the last one ended",
+      "net": "Net effect of these 10",
+      "yes": "Yes",
+      "no": "No",
+      "raises": "Raises risk",
+      "lowers": "Lowers risk",
+      "empty": "No model explanation for this payment.",
+      "signal": "Signal",
+      "value": "Value",
+      "push": "Push",
+      "running": "Running total",
+      "error": "Could not load the model explanation"
+    },
+    "device": {
+      "title": "Device and context",
+      "fingerprint": "Device",
+      "firstSeen": "Device first seen",
+      "rooted": "Rooted / jailbroken",
+      "ip": "IP address",
+      "location": "Location",
+      "vpn": "VPN",
+      "onCall": "On a call",
+      "knownCaller": "Caller in contacts",
+      "unknownCaller": "Unknown caller",
+      "screenShare": "Screen share / remote app"
+    },
+    "history": {
+      "title": "Customer's recent payments",
+      "empty": "No other payments yet.",
+      "count": "Latest {{shown}} of {{total}}"
+    },
+    "verdict": {
+      "title": "Decision",
+      "owner": "Owner: {{owner}}",
+      "unassigned": "nobody",
+      "closedFraud": "Confirmed as fraud",
+      "closedLegit": "Marked as legitimate",
+      "resolvedAt": "{{time}} by {{who}}",
+      "savedNote": "Saved note",
+      "note": "Note (optional; needed to escalate)",
+      "notePlaceholder": "e.g. Called the customer: they did not make this payment",
+      "reasonNeeded": "Write why you are escalating, so the next analyst knows.",
+      "fraud": "Confirm fraud",
+      "legit": "Mark legit",
+      "escalate": "Escalate",
+      "saving": "Saving…",
+      "escalateHint": "Escalate raises the alert to high and puts it back in the queue for a senior analyst."
+    },
+    "toast": {
+      "failed": "Not saved",
+      "fraud": "Confirmed as fraud",
+      "legit": "Marked as legitimate",
+      "escalate": "Escalated",
+      "body": "{{txn}} · the alert queue is updated"
+    }
   }
 }

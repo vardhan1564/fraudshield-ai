@@ -65,7 +65,8 @@ class CaseDetail(BaseModel):
 
 class CaseUpdate(BaseModel):
     """PATCH /cases/{id} (spec 04 §2.4). `status` is the alert's; label and notes the case's.
-    Labelling resolves the case; a case needs a label before it can be closed."""
+    Labelling resolves the case; a case needs a label before it can be closed. `severity` is the
+    alert's: Escalate raises it to high and puts the alert back in the queue."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -73,9 +74,10 @@ class CaseUpdate(BaseModel):
     label: CaseLabel | None = None
     notes: str | None = Field(default=None, max_length=4000)
     assigned_to: uuid.UUID | None = None
+    severity: Severity | None = None
 
     @model_validator(mode="after")
     def _not_empty(self) -> "CaseUpdate":
         if not self.model_fields_set:
-            raise ValueError("send at least one of status, label, notes, assigned_to")
+            raise ValueError("send at least one of status, label, notes, assigned_to, severity")
         return self

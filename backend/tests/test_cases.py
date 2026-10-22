@@ -192,6 +192,41 @@ async def test_assign_and_rules(app: FastAPI, client: AsyncClient, customer: Use
     assert missing.status_code == 404
 
 
+async def test_escalate_raises_severity_and_requeues(
+    app: FastAPI,  # noqa: F811
+    client: AsyncClient,  # noqa: F811
+    customer: User,  # noqa: F811
+) -> None:
+    held = await held_case(app, client, customer)
+    analyst = await make_user(app, role=Role.ANALYST)
+    url, auth = f"/api/v1/cases/{held['case_id']}", bearer(app, analyst)
+    await client.patch(url, json={"severity": "low", "assigned_to": str(analyst.id)}, headers=auth)
+
+    note = "Needs a second look"
+    escalate = {"severity": "high", "status": "open", "assigned_to": None, "notes": note}
+    r = await client.patch(url, json=escalate, headers=auth)
+    assert r.status_code == 200, r.text
+    out = r.json()
+    assert (out["severity"], out["status"], out["assigned_to"]) == ("high", "open", None)
+    queue = (await client.get("/api/v1/alerts", headers=auth)).json()["items"]
+    assert next(a for a in queue if a["case_id"] == held["case_id"])["severity"] == "high"
+    async with app.state.sessionmaker() as session:
+        row = (
+            await session.scalars(
+                select(AuditLog)
+                .where(AuditLog.entity_id == held["case_id"])
+                .order_by(AuditLog.id.desc())
+            )
+        ).first()
+    assert row is not None
+    assert row.before_json == {"severity": "low", "status": "assigned",
+                               "assigned_to": str(analyst.id), "notes": None}  # fmt: skip
+    assert row.after_json == {"severity": "high", "status": "open", "assigned_to": None,
+                              "notes": note}  # fmt: skip
+    bad = await client.patch(url, json={"severity": "urgent"}, headers=auth)
+    assert bad.status_code == 400
+
+
 async def test_login_and_register_are_audited(
     app: FastAPI,  # noqa: F811
     client: AsyncClient,  # noqa: F811

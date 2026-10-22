@@ -154,7 +154,11 @@ export function DashboardLayout() {
             <Menu aria-hidden="true" />
           </Button>
           <h1 className="min-w-0 flex-1 truncate text-base font-semibold sm:text-lg">
-            {current ? t(current.labelKey) : t("app.name")}
+            {current
+              ? t(current.labelKey)
+              : location.pathname.startsWith("/dashboard/cases/")
+                ? t("case.title")
+                : t("app.name")}
           </h1>
           {IS_MOCK && (
             <Badge variant="muted" className="hidden sm:inline-flex">

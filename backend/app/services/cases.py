@@ -137,6 +137,7 @@ async def get_case(session: AsyncSession, case_id: uuid.UUID, language: Language
 def _state(case: Case, alert: Alert) -> dict[str, Any]:
     return {
         "status": alert.status.value,
+        "severity": alert.severity.value,
         "assigned_to": None if alert.assigned_to is None else str(alert.assigned_to),
         "label": None if case.label is None else case.label.value,
         "notes": case.notes,
@@ -152,7 +153,7 @@ async def update_case(
     actor: User,
     ip: str | None,
 ) -> CaseDetail:
-    """`null` for status/label/notes means "no change"; `assigned_to: null` unassigns."""
+    """`null` for status/label/notes/severity means "no change"; `assigned_to: null` unassigns."""
     case, alert, txn, user, payee, _scores = await _load(session, case_id, lock=True)
     before = _state(case, alert)
     sent = body.model_fields_set
@@ -165,6 +166,8 @@ async def update_case(
             if alert.status == AlertStatus.OPEN and body.status is None:
                 alert.status = AlertStatus.ASSIGNED
         alert.assigned_to = body.assigned_to
+    if body.severity is not None:
+        alert.severity = body.severity
     if body.notes is not None:
         case.notes = body.notes
     labeled = body.label is not None and body.label != case.label

@@ -7,16 +7,19 @@ import { alertsLink } from "@/mocks/handlers";
 import { server } from "@/mocks/node";
 import { login } from "@/shared/api/endpoints/auth";
 import { AuthProvider } from "@/shared/components/AuthProvider";
+import { ToastProvider } from "@/shared/components/ToastProvider";
 import { DEMO_PASSWORD } from "@/shared/lib/demo";
 
 /** Render a page as a signed-in user (the stored refresh token restores the session, as on reload). */
-export async function renderSignedIn(ui: ReactElement, email = "analyst@demo.fraudshield") {
+export async function renderSignedIn(ui: ReactElement, email = "analyst@demo.fraudshield", path = "/") {
   await login({ email, password: DEMO_PASSWORD });
   const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   render(
     <QueryClientProvider client={client}>
       <AuthProvider>
-        <MemoryRouter>{ui}</MemoryRouter>
+        <ToastProvider>
+          <MemoryRouter initialEntries={[path]}>{ui}</MemoryRouter>
+        </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>,
   );

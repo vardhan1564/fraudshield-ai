@@ -16,7 +16,8 @@ import { Link } from "react-router-dom";
 
 import { ConnectionStatus } from "@/dashboard/components/ConnectionStatus";
 import { Segmented } from "@/dashboard/components/Segmented";
-import { ALERTS_KEY, useAlertStream } from "@/dashboard/hooks/useAlertStream";
+import { SeverityBadge } from "@/dashboard/components/SeverityBadge";
+import { ALERTS_KEY, QUEUE_KEY, useAlertStream } from "@/dashboard/hooks/useAlertStream";
 import { slaState, type SlaTone } from "@/dashboard/lib/sla";
 import { DEFAULT_SORT, nextSort, type Sort, sortAlerts, type SortKey } from "@/dashboard/lib/sortAlerts";
 import { toApiError } from "@/shared/api/client";
@@ -31,10 +32,8 @@ import { useAuth } from "@/shared/hooks/useAuth";
 import { useNow } from "@/shared/hooks/useNow";
 import { cn } from "@/shared/lib/cn";
 import { formatDuration, formatInr } from "@/shared/lib/format";
-import { RISK_CLASSES } from "@/shared/lib/riskColor";
-import type { AlertItem, Page, Severity } from "@/shared/types/api";
+import type { AlertItem, Page } from "@/shared/types/api";
 
-const QUEUE_KEY = [...ALERTS_KEY, "queue"] as const;
 const QUEUE_SIZE = 200; // the API's page limit
 const REFRESH_MS = 30_000; // backup for a dropped socket; the socket triggers refetches itself
 
@@ -45,16 +44,6 @@ const SLA_LOOK: Record<SlaTone, { icon: typeof Clock; className: string }> = {
   soon: { icon: AlarmClock, className: "font-semibold" },
   overdue: { icon: TriangleAlert, className: "font-semibold text-risk-high" },
 };
-
-function SeverityBadge({ severity }: { severity: Severity }) {
-  const { t } = useTranslation();
-  return (
-    <span className="inline-flex items-center gap-2 text-[13px] font-medium">
-      <span className={cn("size-2 rounded-full", RISK_CLASSES[severity].dot)} aria-hidden="true" />
-      {t(`severity.${severity}`)}
-    </span>
-  );
-}
 
 function SlaCell({ alert, now }: { alert: AlertItem; now: number }) {
   const { t } = useTranslation();

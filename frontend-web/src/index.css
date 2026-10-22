@@ -30,6 +30,9 @@
   /* Chart series (validated with the dataviz palette checks, T4.2): volume = blue, flagged = teal */
   --chart-volume: #2a78d6;
   --chart-flagged: #00897d;
+  /* SHAP waterfall (T4.4), a diverging pair: raises risk = red, lowers risk = blue (validated) */
+  --chart-raises: #e34948;
+  --chart-lowers: #2a78d6;
 }
 
 .dark {
@@ -56,6 +59,8 @@
   --sidebar: oklch(0.19 0.013 257);
   --chart-volume: #3987e5;
   --chart-flagged: #00a99c;
+  --chart-raises: #e66767;
+  --chart-lowers: #3987e5;
 }
 
 @theme inline {
@@ -83,6 +88,8 @@
   --color-sidebar: var(--sidebar);
   --color-chart-volume: var(--chart-volume);
   --color-chart-flagged: var(--chart-flagged);
+  --color-chart-raises: var(--chart-raises);
+  --color-chart-lowers: var(--chart-lowers);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

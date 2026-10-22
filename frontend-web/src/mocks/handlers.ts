@@ -12,6 +12,7 @@ import {
   metrics,
   newPayment,
   reasonsFor,
+  shapFor,
   TRANSACTIONS,
   USERS,
 } from "@/mocks/data";
@@ -180,7 +181,9 @@ export const handlers = [
     const params = new URL(request.url).searchParams;
     const decision = params.get("decision");
     const from = params.get("from");
+    const userId = params.get("user_id");
     const items = TRANSACTIONS.filter((t) => !decision || t.decision === decision)
+      .filter((t) => !userId || t.user_id === userId || t.customer_external_id === userId)
       .filter((t) => !from || Date.parse(t.ts) >= Date.parse(from))
       .sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts))
       .map(toItem);
@@ -192,7 +195,7 @@ export const handlers = [
     if (auth.error) return auth.error;
     const txn = TRANSACTIONS.find((t) => t.txn_id === params.ref || t.id === params.ref);
     if (!txn) return apiError(404, "NOT_FOUND", "Transaction not found");
-    const body: ExplainResponse = { txn_id: txn.txn_id, shap: txn.top_reasons, explanation: txn.explanation ?? "", language: "en" };
+    const body: ExplainResponse = { txn_id: txn.txn_id, shap: shapFor(txn), explanation: txn.explanation ?? "", language: "en" };
     return HttpResponse.json(body);
   }),
 
@@ -234,6 +237,7 @@ export const handlers = [
       ...(body.label && { label: body.label, resolved_by: auth.user.id, resolved_at: new Date().toISOString() }),
       ...(body.notes !== undefined && { notes: body.notes }),
       ...("assigned_to" in body && { assigned_to: body.assigned_to }),
+      ...(body.severity && { severity: body.severity }),
     });
     return HttpResponse.json(found);
   }),

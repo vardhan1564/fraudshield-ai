@@ -54,6 +54,23 @@ export function reasonsFor(risk: number, onCall = false): Reason[] {
   return all.filter((r) => onCall || r.feature !== "ctx_unknown_call").slice(0, risk > 0.25 ? 4 : 2);
 }
 
+/** Top 10 SHAP pushes for the explain endpoint (spec 04 §2.3): the reasons plus signals that lowered the risk. */
+export function shapFor(t: TxnDetail): Reason[] {
+  const lowers: Reason[] = [
+    { feature: "device_age_days", value: 412, impact: -0.42, text: "Known device used for over a year" },
+    { feature: "hour", value: 14, impact: -0.18, text: "Usual time of day for this customer" },
+    { feature: "txn_count_24h", value: 2, impact: -0.12, text: "Normal number of payments today" },
+    { feature: "ip_distance_km", value: 3.2, impact: -0.08, text: "Near the customer's usual location" },
+  ];
+  const raises: Reason[] = [
+    { feature: "amount_zscore", value: 3.1, impact: 0.35, text: "Amount far above this customer's normal" },
+    { feature: "ctx_call_long", value: true, impact: 0.22, text: "Call lasted more than 20 minutes" },
+  ];
+  return [...t.top_reasons, ...raises, ...lowers]
+    .sort((a, b) => Math.abs(b.impact) - Math.abs(a.impact))
+    .slice(0, 10);
+}
+
 export function decisionFor(risk: number): Decision {
   if (risk > 0.25) return "HOLD";
   if (risk > 0.016) return "STEP_UP";

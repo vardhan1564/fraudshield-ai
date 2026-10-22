@@ -5,6 +5,7 @@ import { RouterProvider } from "react-router-dom";
 import { createRouter } from "@/routes";
 import { ApiError } from "@/shared/api/client";
 import { AuthProvider } from "@/shared/components/AuthProvider";
+import { ToastProvider } from "@/shared/components/ToastProvider";
 
 function makeQueryClient(): QueryClient {
   return new QueryClient({
@@ -26,7 +27,9 @@ export function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <AuthProvider>
-        <RouterProvider router={router} />
+        <ToastProvider>
+          <RouterProvider router={router} />
+        </ToastProvider>
       </AuthProvider>
     </QueryClientProvider>
   );

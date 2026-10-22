@@ -235,12 +235,13 @@ export interface CaseDetail {
   explanation: string | null;
 }
 
-/** `null` for status/label/notes = no change; `assigned_to: null` unassigns. */
+/** `null` for status/label/notes/severity = no change; `assigned_to: null` unassigns. */
 export interface CaseUpdate {
   status?: AlertStatus;
   label?: CaseLabel;
   notes?: string;
   assigned_to?: Uuid | null;
+  severity?: Severity; // the alert's; Escalate raises it to high (T4.4)
 }
 
 // --- reports and payee reputation (endpoints 17-18) ------------------------------------------
