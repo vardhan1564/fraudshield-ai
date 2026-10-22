@@ -92,6 +92,24 @@ function needUser(request: Request, roles?: string[]) {
   return { user };
 }
 
+// --- payee reports (spec 01 F7) -----------------------------------------------------------------
+
+const reporters = new Map<string, Set<string>>(); // payee VPA -> customers who reported it here
+
+function isScamVpa(vpa: string): boolean {
+  return vpa.includes("refund") || vpa.includes("cbi") || vpa.includes("earn");
+}
+
+/** Demo scam payees start with 8 reports; each customer can add one more (as the real API). */
+function reportCount(vpa: string): number {
+  return (isScamVpa(vpa) ? 8 : 0) + (reporters.get(vpa)?.size ?? 0);
+}
+
+function reputationOf(count: number) {
+  const score = Math.min(1, Math.round(0.1 * count * 10_000) / 10_000);
+  return { reputation_score: score, risk_level: score > 0.7 ? "high" : score >= 0.3 ? "medium" : "low" } as const;
+}
+
 // --- live updates -----------------------------------------------------------------------------
 
 export const alertsLink = ws.link(`${WS_URL}/alerts`);
@@ -256,13 +274,13 @@ export const handlers = [
     const auth = needUser(request, ["customer"]);
     if (auth.error) return auth.error;
     const body = (await request.json()) as ReportCreate;
-    const created: ReportCreated = {
-      report_id: crypto.randomUUID(),
-      payee_vpa: body.payee_vpa.toLowerCase(),
-      report_count: 1,
-      reputation_score: 0.1,
-      risk_level: "low",
-    };
+    const vpa = body.payee_vpa.trim().toLowerCase();
+    const seen = reporters.get(vpa) ?? new Set<string>();
+    if (seen.has(auth.user.id)) return apiError(409, "ALREADY_REPORTED", "You have already reported this payee");
+    seen.add(auth.user.id);
+    reporters.set(vpa, seen);
+    const count = reportCount(vpa);
+    const created: ReportCreated = { report_id: crypto.randomUUID(), payee_vpa: vpa, report_count: count, ...reputationOf(count) };
     return HttpResponse.json(created, { status: 201 });
   }),
 
@@ -270,13 +288,13 @@ export const handlers = [
     const auth = needUser(request);
     if (auth.error) return auth.error;
     const vpa = String(params.vpa);
-    const scam = vpa.includes("refund") || vpa.includes("cbi") || vpa.includes("earn");
+    const scam = isScamVpa(vpa);
+    const count = reportCount(vpa);
     const body: PayeeReputation = {
       vpa,
       known: true,
-      reputation_score: scam ? 0.8 : 0,
-      risk_level: scam ? "high" : "low",
-      report_count: scam ? 8 : 0,
+      ...reputationOf(count),
+      report_count: count,
       confirmed_fraud_count: 0,
       graph_flag: false,
       account_age_days: scam ? 12 : 1460,

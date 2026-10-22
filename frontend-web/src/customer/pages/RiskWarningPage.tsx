@@ -1,4 +1,4 @@
-import { Loader2, OctagonPause, Phone, SearchX, TriangleAlert, X } from "lucide-react";
+import { Flag, Loader2, OctagonPause, Phone, SearchX, TriangleAlert, X } from "lucide-react";
 import { useCallback, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
@@ -140,6 +140,14 @@ export function RiskWarningPage() {
           )}
         </div>
         {held && <p className="text-base text-muted-foreground">{t("customer.warning.heldNext")}</p>}
+        <Link
+          to="/app/report"
+          state={{ vpa: result.payee }}
+          className="flex min-h-11 items-center justify-center gap-2 text-base font-medium text-primary underline underline-offset-4"
+        >
+          <Flag className="size-5" aria-hidden="true" />
+          {t("customer.warning.report")}
+        </Link>
       </div>
     </div>
   );

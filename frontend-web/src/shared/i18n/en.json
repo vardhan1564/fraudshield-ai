@@ -143,7 +143,8 @@
       "continue": "I know this person. Pay anyway",
       "heldNext": "If someone is on the phone asking you to pay, hang up now.",
       "cancelled": "Payment cancelled",
-      "cancelledBody": "Your money is safe."
+      "cancelledBody": "Your money is safe.",
+      "report": "Report this payee as a scam"
     },
     "done": {
       "title": "Payment sent",
@@ -152,6 +153,36 @@
       "afterWarning": "You chose to pay after a warning. If you feel unsure, call 1930.",
       "home": "Back to home",
       "another": "Make another payment"
+    },
+    "report": {
+      "title": "Report a scam",
+      "intro": "Tell us who tried to cheat you. We will warn other people before they pay them.",
+      "vpa": "Their UPI ID",
+      "type": "What kind of scam was it?",
+      "typeNeeded": "Choose the kind of scam",
+      "types": {
+        "digital_arrest": "Fake police or CBI call",
+        "fake_support_refund": "Fake bank or refund help",
+        "investment_task": "Investment or trading tips",
+        "fake_kyc": "Fake KYC update",
+        "lottery_prize": "Lottery or prize",
+        "job_task": "Job or online task",
+        "phishing": "Fake link or message",
+        "other": "Something else"
+      },
+      "phone": "Number that called you (optional)",
+      "phoneInvalid": "Enter a 10-digit mobile number",
+      "what": "What happened? (optional)",
+      "whatPlaceholder": "e.g. They said my account would be blocked",
+      "submit": "Send report",
+      "sending": "Sending…",
+      "failed": "The report was not sent: {{message}}",
+      "already": "You have already reported this payee. Thank you.",
+      "thanks": "Thank you for reporting",
+      "count_one": "{{count}} person has now reported {{payee}}.",
+      "count_other": "{{count}} people have now reported {{payee}}.",
+      "warnOthers": "We will warn others before they pay this UPI ID.",
+      "another": "Report another scam"
     }
   },
   "errors": {

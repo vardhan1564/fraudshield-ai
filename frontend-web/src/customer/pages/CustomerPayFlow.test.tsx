@@ -8,6 +8,7 @@ import { PhoneFrame } from "@/customer/layout/PhoneFrame";
 import { HomePage } from "@/customer/pages/HomePage";
 import { PayPage } from "@/customer/pages/PayPage";
 import { PaymentDonePage } from "@/customer/pages/PaymentDonePage";
+import { ReportPage } from "@/customer/pages/ReportPage";
 import { RiskWarningPage } from "@/customer/pages/RiskWarningPage";
 import { SettingsPage } from "@/customer/pages/SettingsPage";
 import { server } from "@/mocks/node";
@@ -26,6 +27,7 @@ async function renderApp(path: string) {
         <Route path="pay/:txnId/warning" element={<RiskWarningPage />} />
         <Route path="pay/:txnId/done" element={<PaymentDonePage />} />
         <Route path="settings" element={<SettingsPage />} />
+        <Route path="report" element={<ReportPage />} />
       </Route>
     </Routes>,
     CUSTOMER,
@@ -151,6 +153,15 @@ describe("Customer app: Risk Warning", () => {
     await user.click(screen.getByRole("button", { name: "I know this person. Pay anyway" }));
     expect(await screen.findByRole("heading", { name: "Payment sent" })).toBeInTheDocument();
     expect(screen.getByText(/You chose to pay after a warning/)).toBeInTheDocument();
+  });
+
+  it("'Report this payee' opens the report form with the UPI ID filled in", async () => {
+    scoreAs("HOLD");
+    await renderApp("/app/pay");
+    const user = await pay("cbi.verification@okaxis", "48500");
+    await user.click(await screen.findByRole("link", { name: "Report this payee as a scam" }));
+    expect(await screen.findByRole("heading", { name: "Report a scam" })).toBeInTheDocument();
+    expect(screen.getByLabelText("Their UPI ID")).toHaveValue("cbi.verification@okaxis");
   });
 
   it("Cancel payment goes home and says the money is safe", async () => {
