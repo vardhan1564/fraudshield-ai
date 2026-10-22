@@ -6,10 +6,6 @@ with graph ML, and steps in during social-engineering scams before the money mov
 
 Everything is simulated: no real banks or payment rails are involved.
 
-- Product: [`docs/PRD.md`](docs/PRD.md)
-- Progress: [`docs/PROGRESS.md`](docs/PROGRESS.md)
-- Specs: [`docs/specs/`](docs/specs/)
-
 ## Layout
 | Folder | What |
 |---|---|
