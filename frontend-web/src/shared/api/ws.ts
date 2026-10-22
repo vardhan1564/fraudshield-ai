@@ -1,7 +1,15 @@
 import { refreshAccessToken } from "@/shared/api/client";
 import { tokens } from "@/shared/api/tokens";
 
-export const WS_URL: string = import.meta.env.VITE_WS_URL ?? "ws://localhost:8000/api/v1/ws";
+/** `ws://` or `wss://` to match the page, so a relative `/api/v1/ws` goes through the same proxy. */
+function socketUrl(configured: string): string {
+  const url = new URL(configured, window.location.origin);
+  if (url.protocol === "http:") url.protocol = "ws:";
+  if (url.protocol === "https:") url.protocol = "wss:";
+  return url.href.replace(/\/$/, "");
+}
+
+export const WS_URL: string = socketUrl(import.meta.env.VITE_WS_URL ?? "/api/v1/ws");
 
 export type SocketStatus = "connecting" | "open" | "reconnecting" | "closed";
 

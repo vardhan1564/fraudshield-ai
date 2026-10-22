@@ -51,7 +51,7 @@ function ToastItem({ toast, onClose }: { toast: Toast; onClose: () => void }) {
   );
 }
 
-/** Short confirmations in the bottom-right corner; they close by themselves after 5 s. */
+/** Short confirmations (top on phones, bottom-right on wider screens); they close by themselves after 5 s. */
 export function ToastProvider({ children }: { children: ReactNode }) {
   const [toasts, setToasts] = useState<Toast[]>([]);
   const next = useRef(0);
@@ -65,7 +65,8 @@ export function ToastProvider({ children }: { children: ReactNode }) {
   return (
     <ToastContext.Provider value={value}>
       {children}
-      <div className="pointer-events-none fixed bottom-4 right-4 z-50 flex flex-col items-end gap-2">
+      {/* phones: top centre, clear of the bottom nav; wider screens: bottom right */}
+      <div className="pointer-events-none fixed inset-x-4 top-4 z-50 flex flex-col items-center gap-2 sm:inset-x-auto sm:bottom-4 sm:right-4 sm:top-auto sm:items-end">
         {toasts.map((x) => (
           <ToastItem key={x.id} toast={x} onClose={() => remove(x.id)} />
         ))}

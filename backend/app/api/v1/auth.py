@@ -6,14 +6,17 @@ from fastapi import APIRouter, Request, status
 
 from app.api.deps import CurrentUser, RedisDep, SessionDep, SettingsDep
 from app.core.privacy import mask_phone
+from app.models import User
 from app.schemas.auth import (
     LoginRequest,
+    MeUpdate,
     RefreshRequest,
     RegisterRequest,
     TokenResponse,
     UserResponse,
 )
 from app.schemas.errors import ErrorResponse
+from app.services import audit
 from app.services import auth as service
 
 router = APIRouter(prefix="/auth", tags=["auth"])
@@ -59,8 +62,7 @@ async def refresh(
     return await service.refresh(body.refresh_token, session, redis, settings)
 
 
-@router.get("/me", response_model=UserResponse, responses=ERRORS)
-async def me(user: CurrentUser) -> UserResponse:
+def _me(user: User) -> UserResponse:
     return UserResponse(
         id=user.id,
         name=user.name,
@@ -69,3 +71,24 @@ async def me(user: CurrentUser) -> UserResponse:
         role=user.role,
         language=user.language,
     )
+
+
+@router.get("/me", response_model=UserResponse, responses=ERRORS)
+async def me(user: CurrentUser) -> UserResponse:
+    return _me(user)
+
+
+@router.patch("/me", response_model=UserResponse, responses=ERRORS)
+async def update_me(
+    body: MeUpdate, user: CurrentUser, session: SessionDep, request: Request
+) -> UserResponse:
+    """Save the user's language (T4.5): the next payment's reasons and warning use it."""
+    if body.language != user.language:
+        audit.record(
+            session, actor_id=user.id, action="user.update", entity="user", entity_id=user.id,
+            before={"language": user.language.value}, after={"language": body.language.value},
+            ip=request.client.host if request.client else None,
+        )  # fmt: skip
+        user.language = body.language
+        await session.commit()
+    return _me(user)

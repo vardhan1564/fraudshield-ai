@@ -24,6 +24,7 @@ import type {
   CaseUpdate,
   ExplainResponse,
   LoginRequest,
+  Me,
   Page,
   PayeeReputation,
   ReportCreate,
@@ -94,7 +95,7 @@ function needUser(request: Request, roles?: string[]) {
 // --- live updates -----------------------------------------------------------------------------
 
 export const alertsLink = ws.link(`${WS_URL}/alerts`);
-const customerLink = ws.link(`${WS_URL}/customer`);
+export const customerLink = ws.link(`${WS_URL}/customer`);
 
 /** The worker's `alert.created` for a HOLD payment (spec 04 §3). */
 export function alertCreated(txn: TxnDetail): AlertCreatedMessage {
@@ -134,6 +135,14 @@ export const handlers = [
   http.get(url("/auth/me"), ({ request }) => {
     const user = userOf(request);
     return user ? HttpResponse.json(user) : apiError(401, "UNAUTHORIZED", "Invalid token");
+  }),
+
+  http.patch(url("/auth/me"), async ({ request }) => {
+    const user = userOf(request);
+    if (!user) return apiError(401, "UNAUTHORIZED", "Invalid token");
+    const body = (await request.json()) as { language: Me["language"] };
+    user.language = body.language;
+    return HttpResponse.json(user);
   }),
 
   http.post(url("/transactions/score"), async ({ request }) => {
@@ -176,12 +185,13 @@ export const handlers = [
   }),
 
   http.get(url("/transactions"), ({ request }) => {
-    const auth = needUser(request, ["analyst", "admin"]);
+    const auth = needUser(request, ["analyst", "admin", "customer"]);
     if (auth.error) return auth.error;
     const params = new URL(request.url).searchParams;
     const decision = params.get("decision");
     const from = params.get("from");
-    const userId = params.get("user_id");
+    // customers (and mine=true) only ever get their own payments (T4.5)
+    const userId = auth.user.role === "customer" || params.get("mine") === "true" ? auth.user.id : params.get("user_id");
     const items = TRANSACTIONS.filter((t) => !decision || t.decision === decision)
       .filter((t) => !userId || t.user_id === userId || t.customer_external_id === userId)
       .filter((t) => !from || Date.parse(t.ts) >= Date.parse(from))

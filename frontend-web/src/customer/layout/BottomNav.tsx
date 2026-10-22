@@ -20,7 +20,7 @@ export function BottomNav() {
               end={to === "/app"}
               className={({ isActive }) =>
                 cn(
-                  "flex min-h-16 flex-col items-center justify-center gap-1 px-1 text-[12px] font-medium transition-colors",
+                  "flex min-h-16 flex-col items-center justify-center gap-1 px-0.5 text-base font-medium leading-tight transition-colors",
                   isActive ? "text-primary" : "text-muted-foreground hover:text-foreground",
                 )
               }
@@ -35,7 +35,7 @@ export function BottomNav() {
                   >
                     <Icon className="size-[22px]" aria-hidden="true" />
                   </span>
-                  <span className="truncate">{t(labelKey)}</span>
+                  <span className="max-w-full truncate">{t(labelKey)}</span>
                 </>
               )}
             </NavLink>

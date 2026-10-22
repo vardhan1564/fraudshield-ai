@@ -63,7 +63,96 @@
   "customer": {
     "hello": "Hello, {{name}}",
     "protected": "Your payments are protected",
-    "protectedBody": "We check every payment for scams before your money moves."
+    "protectedBody": "We check every payment for scams before your money moves.",
+    "home": {
+      "balance": "Demo balance",
+      "pay": "Pay someone",
+      "recent": "Recent payments",
+      "recentError": "Could not load your payments. Please try again later.",
+      "noPayments": "No payments yet.",
+      "tipTitle": "Safety tip",
+      "tip1": "Police, CBI or customs never ask you to pay over a video call. Hang up and call 1930.",
+      "tip2": "You never need to pay or enter your PIN to receive money.",
+      "tip3": "Never install AnyDesk or TeamViewer because a caller asked you to.",
+      "tip4": "Bank staff never ask for your OTP or UPI PIN. Do not share it with anyone."
+    },
+    "status": {
+      "APPROVE": "Paid",
+      "STEP_UP": "Checked",
+      "HOLD": "Paused"
+    },
+    "rep": {
+      "checking": "Checking this payee…",
+      "reported_one": "Reported as a scam by {{count}} person",
+      "reported_other": "Reported as a scam by {{count}} people",
+      "someReports_one": "{{count}} person reported this payee. Be careful.",
+      "someReports_other": "{{count}} people reported this payee. Be careful.",
+      "unknown": "New payee. Check the name before you pay.",
+      "newAccount_one": "This account is only {{count}} day old",
+      "newAccount_other": "This account is only {{count}} days old",
+      "clean": "No scam reports for this payee"
+    },
+    "sim": {
+      "title": "Simulate phone signals",
+      "body": "A browser can't see your calls, so for the demo you set them here. Every payment sends them.",
+      "onCall": "On a phone call",
+      "unknownCaller": "Caller is not in my contacts",
+      "unknownCallerHint": "An unknown number",
+      "callLength": "Call has lasted",
+      "minutes_one": "{{count}} min",
+      "minutes_other": "{{count}} min",
+      "screenShare": "Sharing my screen",
+      "remoteApp": "Remote-access app",
+      "none": "None",
+      "vpn": "Using a VPN",
+      "scamCall": "Scam call",
+      "reset": "Normal",
+      "active": "Simulated:",
+      "shortCall": "on a call",
+      "shortUnknownCall": "call from unknown number",
+      "shortScreen": "screen sharing",
+      "usualPhone": "Using my usual phone",
+      "usualPhoneHint": "Turn off to pay from a brand-new phone",
+      "shortNewPhone": "new phone"
+    },
+    "pay": {
+      "title": "Pay",
+      "to": "Pay to (UPI ID)",
+      "toPlaceholder": "name@bank",
+      "vpaInvalid": "Enter a UPI ID like name@bank",
+      "amount": "Amount",
+      "amountInvalid": "Enter an amount, like 200",
+      "amountTooBig": "The most you can send at once is {{max}}",
+      "failed": "The payment did not go through: {{message}}",
+      "checking": "Checking the payment…",
+      "submit": "Pay",
+      "note": "We check every payment for scams before your money moves."
+    },
+    "warning": {
+      "youArePaying": "You are paying",
+      "to": "to {{payee}}",
+      "notFound": "We could not find this payment.",
+      "heldTitle": "We have paused this payment",
+      "checkTitle": "Stop. This payment may be a scam",
+      "heldBody": "Your money has not left your account. Our team will check this payment.",
+      "checkBody": "Read why before you decide. Your money has not left your account.",
+      "why": "Why we are worried",
+      "moreComing": "Getting more detail…",
+      "cancel": "Cancel payment",
+      "callHelpline": "Call cyber-fraud helpline {{number}}",
+      "continue": "I know this person. Pay anyway",
+      "heldNext": "If someone is on the phone asking you to pay, hang up now.",
+      "cancelled": "Payment cancelled",
+      "cancelledBody": "Your money is safe."
+    },
+    "done": {
+      "title": "Payment sent",
+      "when": "When",
+      "ref": "Reference",
+      "afterWarning": "You chose to pay after a warning. If you feel unsure, call 1930.",
+      "home": "Back to home",
+      "another": "Make another payment"
+    }
   },
   "errors": {
     "UNAUTHORIZED": "Wrong email or password.",

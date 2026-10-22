@@ -83,8 +83,9 @@ async def explanation(
 
 @router.get("", response_model=Page[TxnItem], responses=ERRORS)
 async def list_transactions(
-    _staff: Annotated[User, Depends(require_role(Role.ANALYST, Role.ADMIN))],
+    viewer: Annotated[User, Depends(require_role(Role.ANALYST, Role.ADMIN, Role.CUSTOMER))],
     session: SessionDep,
+    mine: bool = False,
     decision: Decision | None = None,
     channel: Channel | None = None,
     user_id: Annotated[str | None, Query(max_length=64)] = None,
@@ -96,7 +97,10 @@ async def list_transactions(
     page_size: PageSize = 50,
 ) -> Page[TxnItem]:
     """Scored payments, newest first. `from` inclusive, `to` exclusive (ISO-8601);
-    `user_id` is the customer's external id or UUID."""
+    `user_id` is the customer's external id or UUID. `mine=true` = only the caller's payments;
+    customers always get only their own (their Home, T4.5), whatever `user_id` says."""
+    if mine or viewer.role == Role.CUSTOMER:
+        user_id = str(viewer.id)
     return await txn_views.list_transactions(
         session, decision=decision, channel=channel, user_ref=user_id, payee_vpa=payee_vpa,
         date_from=date_from, date_to=date_to, min_risk=min_risk, page=page, page_size=page_size,

@@ -59,9 +59,29 @@ async def test_list_filters_and_paging(app: FastAPI, client: AsyncClient, custom
 
     admin = bearer(app, await make_user(app, role=Role.ADMIN))
     assert (await client.get(LIST, headers=admin)).status_code == 200
-    assert (await client.get(LIST, headers=bearer(app, customer))).status_code == 403
     bad = await client.get(LIST, params={"min_risk": 2}, headers=auth)
     assert bad.status_code == 400
+
+
+async def test_customers_list_only_their_own_payments(
+    app: FastAPI,  # noqa: F811
+    client: AsyncClient,  # noqa: F811
+    customer: User,  # noqa: F811
+) -> None:
+    mine = await three_payments(client, customer)
+    other = await make_user(app)
+    await three_payments(client, other)
+    me = bearer(app, customer)
+
+    async def txn_ids(**params: object) -> list[str]:
+        r = await client.get(LIST, params=params, headers=me)
+        assert r.status_code == 200, r.text
+        return [t["txn_id"] for t in r.json()["items"]]
+
+    assert await txn_ids(mine="true") == mine[::-1]
+    assert await txn_ids() == mine[::-1]  # customers never see anyone else's
+    assert await txn_ids(user_id=other.external_id) == mine[::-1]
+    assert await txn_ids(mine="true", decision="HOLD") == [mine[2]]
 
 
 async def test_detail(app: FastAPI, client: AsyncClient, customer: User) -> None:  # noqa: F811

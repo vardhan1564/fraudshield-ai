@@ -1,5 +1,9 @@
 """Demo data (spec 05 §4): 1 admin, 2 analysts, 20 customers with trusted contacts,
-50 payees (5 reported) and 5 rules.
+50 payees (5 reported) and 5 rules. It also loads the facts the online features read from
+Redis (spec 05 §2), as a bank's systems would have them: each customer's usual phone, registered
+a year ago (`device:D-phone-{user id}`, the id the customer app sends for "my usual phone"),
+and every payee's account age and report count (`rep:{vpa}`). Without them every payment would
+look like a new phone paying a new payee (T4.5).
 
 Run from the repo root after `cd backend && alembic upgrade head`:
     python scripts/seed.py
@@ -13,6 +17,7 @@ import random
 import secrets
 import sys
 from dataclasses import dataclass, field
+from datetime import UTC, datetime, timedelta
 from decimal import Decimal
 from pathlib import Path
 from typing import Any
@@ -20,14 +25,17 @@ from typing import Any
 ROOT = Path(__file__).resolve().parents[1]
 sys.path.insert(0, str(ROOT / "backend"))
 
+from redis.asyncio import Redis  # noqa: E402
 from sqlalchemy import func, select  # noqa: E402
 from sqlalchemy.ext.asyncio import AsyncSession  # noqa: E402
 
 from app.core.config import get_settings  # noqa: E402
 from app.core.db import make_engine, make_sessionmaker  # noqa: E402
+from app.core.redis import make_redis  # noqa: E402
 from app.core.security import BCRYPT_ROUNDS, hash_password  # noqa: E402
 from app.models import Payee, Report, Rule, TrustedContact, User  # noqa: E402
 from app.models.enums import Language, Role, RuleAction  # noqa: E402
+from app.services.features import put_device  # noqa: E402
 
 CREDENTIALS_FILE = ROOT / "scripts" / "seed_credentials.local.txt"
 DOMAIN = "fraudshield.local"
@@ -208,6 +216,34 @@ async def seed(session: AsyncSession, rounds: int = BCRYPT_ROUNDS) -> SeedResult
     return result
 
 
+USUAL_PHONE_AGE = timedelta(days=365)
+
+
+def usual_phone(user_id: object) -> str:
+    """The customer's registered phone; the customer app sends it when "my usual phone" is on."""
+    return f"D-phone-{user_id}"
+
+
+async def prime_online_features(session: AsyncSession, redis: Redis) -> dict[str, int]:
+    """Load every customer's usual phone and every payee's facts into Redis. Overwrites, so it
+    is safe to re-run; report counts come from Postgres, the source of truth."""
+    since = datetime.now(UTC) - USUAL_PHONE_AGE
+    customers = (await session.scalars(select(User.id).where(User.role == Role.CUSTOMER))).all()
+    for user_id in customers:
+        await put_device(redis, usual_phone(user_id), since, is_rooted=False)
+    payees = (await session.execute(
+        select(Payee.vpa_or_account, Payee.account_age_days, Payee.report_count)
+    )).all()  # fmt: skip
+    async with redis.pipeline(transaction=False) as pipe:
+        for vpa, age, reports in payees:
+            facts = {"report_count": str(reports or 0)}
+            if age is not None:
+                facts["account_age_days"] = str(age)
+            pipe.hset(f"rep:{vpa}", mapping=facts)
+        await pipe.execute()
+    return {"devices": len(customers), "payees": len(payees)}
+
+
 async def row_counts(session: AsyncSession) -> dict[str, int]:
     tables = {"users": User, "trusted_contacts": TrustedContact, "payees": Payee,
               "reports": Report, "rules": Rule}  # fmt: skip
@@ -218,13 +254,17 @@ async def row_counts(session: AsyncSession) -> dict[str, int]:
 
 
 async def main() -> int:
-    engine = make_engine(get_settings())
+    settings = get_settings()
+    engine = make_engine(settings)
+    redis = make_redis(settings)
     try:
         async with make_sessionmaker(engine)() as session:
             result = await seed(session)
             counts = await row_counts(session)
+            primed = await prime_online_features(session, redis)
     finally:
         await engine.dispose()
+        await redis.aclose()
 
     if result.credentials:
         lines = [f"{role:<9} {email:<32} {pw}" for role, email, pw in result.credentials]
@@ -234,6 +274,7 @@ async def main() -> int:
         print("\n".join(lines))
     print(f"\nCreated: {result.created or 'nothing, already seeded'}")
     print("Row counts:", ", ".join(f"{k} {v}" for k, v in counts.items()))
+    print(f"Online features in Redis: {primed['devices']} usual phones, {primed['payees']} payees")
     return 0
 
 

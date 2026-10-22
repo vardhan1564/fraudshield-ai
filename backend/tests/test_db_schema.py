@@ -7,18 +7,21 @@ Like test_services.py they skip locally without Docker and fail in CI.
 
 import asyncio
 from collections.abc import AsyncIterator, Iterator
+from datetime import UTC, datetime
 
 import pytest
 from alembic import command
 from alembic.autogenerate import compare_metadata
 from alembic.migration import MigrationContext
+from redis.asyncio import Redis
 from sqlalchemy import text
 from sqlalchemy.engine import Connection
 from sqlalchemy.exc import DBAPIError
 from sqlalchemy.ext.asyncio import AsyncEngine, AsyncSession, create_async_engine
 
+from app.core.config import Settings
 from app.models import Base
-from scripts.seed import row_counts, seed
+from scripts.seed import prime_online_features, row_counts, seed, usual_phone
 from tests.conftest import alembic_config, ensure_test_db, test_db_url
 
 SPEC_TABLES = {
@@ -135,3 +138,31 @@ async def test_seed_loads_spec_counts_and_is_idempotent(engine: AsyncEngine) -> 
     assert counts == {"users": 23, "trusted_contacts": 20, "payees": 50, "reports": 12, "rules": 5}
     assert reported == 5
     assert roles == {"admin": 1, "analyst": 2, "customer": 20}
+
+
+async def test_seed_primes_the_online_features(engine: AsyncEngine) -> None:
+    redis = Redis.from_url(Settings().redis_url.rsplit("/", 1)[0] + "/12", decode_responses=True)
+    try:
+        await redis.flushdb()
+        async with AsyncSession(engine, expire_on_commit=False) as session:
+            await seed(session, rounds=4)
+            primed = await prime_online_features(session, redis)
+            again = await prime_online_features(session, redis)  # safe to re-run
+            customer = await session.scalar(
+                text("select id from users where role = 'customer' limit 1")
+            )
+            shop_age = await session.scalar(
+                text("select account_age_days from payees where report_count = 0 limit 1")
+            )
+        assert primed == again == {"devices": 20, "payees": 50}
+        phone = await redis.hgetall(f"device:{usual_phone(customer)}")
+        assert phone["is_rooted"] == "0"
+        assert datetime.now(UTC).timestamp() - float(phone["first_seen"]) > 300 * 86_400
+        scam = await redis.hgetall("rep:cbi.verification@okaxis")
+        assert scam["report_count"] == "3"
+        shops = [k async for k in redis.scan_iter("rep:*")]
+        assert len(shops) == 50
+        assert shop_age is not None and shop_age >= 200
+    finally:
+        await redis.flushdb()
+        await redis.aclose()

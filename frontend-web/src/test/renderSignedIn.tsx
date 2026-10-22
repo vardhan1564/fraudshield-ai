@@ -3,7 +3,7 @@ import { render } from "@testing-library/react";
 import type { ReactElement } from "react";
 import { MemoryRouter } from "react-router-dom";
 
-import { alertsLink } from "@/mocks/handlers";
+import { alertsLink, customerLink } from "@/mocks/handlers";
 import { server } from "@/mocks/node";
 import { login } from "@/shared/api/endpoints/auth";
 import { AuthProvider } from "@/shared/components/AuthProvider";
@@ -32,6 +32,20 @@ export function controlAlertsSocket() {
   const connected = new Promise<void>((resolve) => {
     server.use(
       alertsLink.addEventListener("connection", ({ client }) => {
+        push = (message) => client.send(JSON.stringify(message));
+        resolve();
+      }),
+    );
+  });
+  return { connected, push: (message: object) => push(message) };
+}
+
+/** The same for `/ws/customer`. */
+export function controlCustomerSocket() {
+  let push: (message: object) => void = () => undefined;
+  const connected = new Promise<void>((resolve) => {
+    server.use(
+      customerLink.addEventListener("connection", ({ client }) => {
         push = (message) => client.send(JSON.stringify(message));
         resolve();
       }),

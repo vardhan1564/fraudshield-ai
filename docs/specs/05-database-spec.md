@@ -144,6 +144,8 @@ Computed per account each refresh: degree, PageRank, hops to nearest confirmed-f
 ## 4. Seed data
 `scripts/seed.py` creates: 1 admin, 2 analysts, 20 customers with trusted contacts, 50 payees (5 reported), 5 rules. Credentials printed once; stored in `scripts/seed_credentials.local.txt` (git-ignored).
 
+_(T4.5)_ `scripts/seed.py` also loads these keys for the demo data, as a bank's systems would already hold them (overwritten on every run, Postgres is the source): `device:D-phone-{user uuid}` for each seeded customer (their usual phone, `first_seen` a year ago, not rooted) and `rep:{vpa}` `account_age_days` + `report_count` for every payee. Without them every dev payment looked like a new phone paying a 0-day-old payee and even ₹200 to a known shop was held. The customer app sends `D-phone-{user uuid}` while "Using my usual phone" is on (Simulate panel), else its own browser id `D-web-xxxxxxxx` (a new phone for 24 h, as offline). Nothing registers a new device online yet (device binding): follow-up.
+
 ## 5. Implementation notes (T3.1)
 - Models: `backend/app/models/` (`core.py`, `operations.py`, `graph.py`); migration `backend/alembic/versions/*_initial_schema.py`.
 - Nullability the table above leaves open: the customer profile columns of `users` (`city`, `city_tier`, `age_band`, `kyc_level`, `avg_txn_amount`) and `external_id` are null for staff; scoring columns of `transactions` are null until scored; `cases.resolved_by` is null until resolved.

@@ -173,6 +173,7 @@ export interface TxnDetail extends TxnItem {
 }
 
 export interface TxnFilters {
+  mine?: boolean; // only the caller's payments; customers always get only their own (T4.5)
   decision?: Decision;
   channel?: Channel;
   user_id?: string;

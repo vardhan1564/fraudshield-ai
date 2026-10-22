@@ -1,13 +1,23 @@
 import { Languages } from "lucide-react";
 import { useTranslation } from "react-i18next";
 
+import { updateMe } from "@/shared/api/endpoints/auth";
+import { useAuth } from "@/shared/hooks/useAuth";
 import { LANGUAGES, setLanguage } from "@/shared/i18n";
 import { cn } from "@/shared/lib/cn";
 import type { Language } from "@/shared/types/api";
 
-/** Native select: accessible, works the same on desktop and phones. */
+/**
+ * Native select: accessible, works the same on desktop and phones. Signed in, the choice is
+ * also saved to the profile, so it survives a reload and the risk warnings use it (T4.5).
+ */
 export function LanguageSwitcher({ className }: { className?: string }) {
   const { t, i18n } = useTranslation();
+  const { state } = useAuth();
+  const change = (language: Language) => {
+    setLanguage(language);
+    if (state.status === "authenticated") void updateMe({ language }).catch(() => undefined); // the screen already switched
+  };
   return (
     <label
       className={cn(
@@ -21,7 +31,7 @@ export function LanguageSwitcher({ className }: { className?: string }) {
       <span className="sr-only">{t("common.language")}</span>
       <select
         value={i18n.resolvedLanguage ?? "en"}
-        onChange={(e) => setLanguage(e.target.value as Language)}
+        onChange={(e) => change(e.target.value as Language)}
         className="cursor-pointer appearance-none bg-transparent pr-1 font-medium text-foreground outline-none"
       >
         {LANGUAGES.map((l) => (

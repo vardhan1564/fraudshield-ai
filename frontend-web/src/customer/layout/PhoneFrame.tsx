@@ -1,6 +1,7 @@
 import { Outlet } from "react-router-dom";
 
 import { BottomNav } from "@/customer/layout/BottomNav";
+import { SimContextProvider } from "@/customer/state/SimContextProvider";
 
 /**
  * Spec 07 §1: on a laptop the app sits in a centred phone frame (max 420 px) so the demo can
@@ -8,6 +9,7 @@ import { BottomNav } from "@/customer/layout/BottomNav";
  */
 export function PhoneFrame() {
   return (
+    <SimContextProvider>
     <div className="min-h-dvh bg-background sm:grid sm:place-items-center sm:bg-muted sm:p-6">
       <div
         className={
@@ -27,5 +29,6 @@ export function PhoneFrame() {
         <BottomNav />
       </div>
     </div>
+    </SimContextProvider>
   );
 }

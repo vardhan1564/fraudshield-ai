@@ -122,6 +122,23 @@ async def test_register_then_me_with_masked_phone(client: AsyncClient) -> None:
     assert again.status_code == 409 and again.json()["error"]["code"] == "EMAIL_TAKEN"
 
 
+async def test_me_saves_the_language(client: AsyncClient) -> None:
+    email = f"lang-{uuid.uuid4().hex[:6]}@example.com"
+    body = {"name": "Kamla", "phone": "9876543211", "email": email, "password": PASSWORD}
+    token = (await client.post("/api/v1/auth/register", json=body)).json()["access_token"]
+
+    r = await client.patch("/api/v1/auth/me", json={"language": "hi"}, headers=bearer(token))
+    assert r.status_code == 200, r.text
+    assert r.json()["language"] == "hi" and r.json()["phone"] == "98xxxxxx11"
+    me = (await client.get("/api/v1/auth/me", headers=bearer(token))).json()
+    assert me["language"] == "hi"  # saved, not just echoed
+
+    for bad in ({"language": "fr"}, {"role": "admin"}, {}):
+        resp = await client.patch("/api/v1/auth/me", json=bad, headers=bearer(token))
+        assert resp.status_code == 400, bad
+    assert (await client.patch("/api/v1/auth/me", json={"language": "en"})).status_code == 401
+
+
 @pytest.mark.parametrize(
     "change",
     [{"password": "short"}, {"phone": "12345"}, {"email": "not-an-email"}, {"password": "é" * 40}],

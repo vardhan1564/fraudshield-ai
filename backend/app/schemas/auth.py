@@ -16,6 +16,14 @@ def _check_password(value: str) -> str:
     return value
 
 
+class MeUpdate(BaseModel):
+    """PATCH /auth/me (T4.5): the user's language; warnings and reasons use it."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    language: Language
+
+
 class RegisterRequest(BaseModel):
     model_config = ConfigDict(str_strip_whitespace=True)
 

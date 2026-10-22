@@ -2,6 +2,9 @@ import { createBrowserRouter, type RouteObject } from "react-router-dom";
 
 import { PhoneFrame } from "@/customer/layout/PhoneFrame";
 import { HomePage } from "@/customer/pages/HomePage";
+import { PayPage } from "@/customer/pages/PayPage";
+import { PaymentDonePage } from "@/customer/pages/PaymentDonePage";
+import { RiskWarningPage } from "@/customer/pages/RiskWarningPage";
 import { SettingsPage } from "@/customer/pages/SettingsPage";
 import { DashboardLayout } from "@/dashboard/layout/DashboardLayout";
 import { ALL_NAV } from "@/dashboard/layout/nav";
@@ -49,7 +52,9 @@ export const routes: RouteObject[] = [
         element: <PhoneFrame />,
         children: [
           { index: true, element: <HomePage /> },
-          { path: "pay", element: <CustomerPlaceholder index={1} /> },
+          { path: "pay", element: <PayPage /> },
+          { path: "pay/:txnId/warning", element: <RiskWarningPage /> },
+          { path: "pay/:txnId/done", element: <PaymentDonePage /> },
           { path: "report", element: <CustomerPlaceholder index={2} /> },
           { path: "safety", element: <CustomerPlaceholder index={3} /> },
           { path: "settings", element: <SettingsPage /> },

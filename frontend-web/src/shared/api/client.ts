@@ -3,7 +3,11 @@ import axios, { AxiosError, type AxiosRequestConfig, type InternalAxiosRequestCo
 import { tokens } from "@/shared/api/tokens";
 import type { ApiErrorBody, TokenResponse } from "@/shared/types/api";
 
-export const API_URL: string = import.meta.env.VITE_API_URL ?? "http://localhost:8000/api/v1";
+/**
+ * Usually relative (`/api/v1`): the Vite dev server (and Nginx in production) forwards it to the
+ * backend, so the app works from any address, e.g. a phone on `http://<laptop-ip>:5173` (T4.5).
+ */
+export const API_URL: string = new URL(import.meta.env.VITE_API_URL ?? "/api/v1", window.location.origin).href.replace(/\/$/, "");
 
 /** A failed call, in the API's own words: `{"error": {"code", "message"}}` (spec 04). */
 export class ApiError extends Error {
