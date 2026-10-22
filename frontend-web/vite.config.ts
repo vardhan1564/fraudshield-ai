@@ -45,7 +45,12 @@ export default defineConfig({
   envDir: path.resolve(import.meta.dirname, ".."),
   resolve: { alias: { "@": path.resolve(import.meta.dirname, "src") } },
   // /api (incl. WebSockets) goes to the backend: one origin for laptop and phone, no CORS (T4.5)
-  server: { port: 5173, proxy: { "/api": { target: "http://127.0.0.1:8000", ws: true } } },
+  server: {
+    port: 5173,
+    proxy: { "/api": { target: "http://127.0.0.1:8000", ws: true } },
+    // the rules form reads the model's feature list from ml/features (T4.7), outside this project
+    fs: { allow: [import.meta.dirname, path.resolve(import.meta.dirname, "../ml/features")] },
+  },
   preview: { port: 4173, proxy: { "/api": { target: "http://127.0.0.1:8000", ws: true } } },
   test: {
     globals: true,

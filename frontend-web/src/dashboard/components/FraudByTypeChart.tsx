@@ -22,7 +22,7 @@ function TypeTooltip({ active, row }: { active?: boolean; row: TypeRow | undefin
 }
 
 /** Horizontal bars, one colour (single series: no legend), largest first, value at the tip. */
-export function FraudByTypeChart({ rows }: { rows: TypeRow[] }) {
+export function FraudByTypeChart({ rows, label, totalLabel }: { rows: TypeRow[]; label?: string; totalLabel?: string }) {
   const { t } = useTranslation();
   const max = Math.max(...rows.map((r) => r.count), 1);
   const total = rows.reduce((sum, r) => sum + r.count, 0);
@@ -30,7 +30,7 @@ export function FraudByTypeChart({ rows }: { rows: TypeRow[] }) {
   const labelRoom = formatNumber(max).length * 8 + 12;
   return (
     <div>
-    <div style={{ height: rows.length * ROW_PX + 8 }} aria-label={t("overview.types.title")}>
+    <div style={{ height: rows.length * ROW_PX + 8 }} aria-label={label ?? t("overview.types.title")}>
       <ResponsiveContainer width="100%" height="100%">
         <BarChart data={rows} layout="vertical" margin={{ top: 0, right: labelRoom, bottom: 0, left: 0 }} barCategoryGap={8}>
           <CartesianGrid horizontal={false} stroke="var(--border)" />
@@ -60,7 +60,7 @@ export function FraudByTypeChart({ rows }: { rows: TypeRow[] }) {
       </ResponsiveContainer>
     </div>
     <p className="mt-4 flex items-baseline justify-between border-t pt-3 text-sm">
-      <span className="text-muted-foreground">{t("overview.types.total")}</span>
+      <span className="text-muted-foreground">{totalLabel ?? t("overview.types.total")}</span>
       <span className="font-semibold tabular-nums">{formatNumber(total)}</span>
     </p>
     </div>
