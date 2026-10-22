@@ -98,6 +98,7 @@
 | 2026-10-20 | Redis: AOF only (`--save ""`) | RDB snapshots on top of AOF forked Redis every minute under load and stalled it |
 | 2026-10-20 | Web: access token in memory, refresh token in localStorage | A reload keeps the session; rotation limits a stolen refresh token. HttpOnly cookie needs a backend change: T6.2 |
 | 2026-10-20 | Web: `npm run dev:mock` serves the UI on MSW mocks of the real API shapes | Front-end work and demos don't need the backend; tests use the same mocks |
+| 2026-10-22 | Spec 06 §4: HOLDs on the Live Monitor within 1 s, other payments within the 3 s poll | Only HOLDs are pushed (spec 04 §3); pushing every payment would flood the analyst socket at 50+ rps for little value |
 | 2026-10-22 | Escalate = alert severity to high + back in the queue unassigned, with a required note (PATCH /cases accepts `severity`) | The specs named Escalate but never defined it; this needs no new column or status and the 15-min SLA puts it in front of a senior analyst |
 
 ## Notes
