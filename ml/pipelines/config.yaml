@@ -13,6 +13,7 @@ datasets:
     features: ml/data/features/simulated.parquet # from python -m ml.features.build
     raw_dir: ml/data/simulated # used to build the features if the file is missing
     warmup_days: 14 # features see these days, training doesn't (users need history first)
+    graph_scores: ml/data/features/graph_scores.parquet # payer graph_score at payment time (ml.models.gnn)
   ieee:
     raw_dir: ml/data/raw/ieee
     max_rows: null # e.g. 300000 to train on the earliest rows if memory is short
@@ -70,3 +71,22 @@ meta:
   unknown_call_boost: 0.25 # spec 01 F2 rule: unknown call + new payee adds this to risk_score
   f2_max_base_risk: 0.8 # F2 check counts payments whose risk without the call is <= this
   mlflow_experiment: meta_model
+
+# Graph model (T5.2): GraphSAGE mule classifier on 30-day graph snapshots (spec 01 F3).
+# Trained on separate simulator worlds; the 20 rings in the main dataset are never trained on.
+graph:
+  train_seeds: [101, 102] # simulator worlds to train on
+  val_seed: 103 # world for early stopping and the threshold
+  window_days: 30 # graph_refresh loads the last 30 days (spec 05 section 3)
+  train_every_days: 2 # training snapshots, from day 30 to the end
+  history_every_hours: 3 # point-in-time snapshots for the meta-model's graph_score
+  fraud_min_reports: 2 # offline stand-in for confirmed fraud: payees with >= 2 earlier reports
+  target_fpr: 0.01 # threshold: <= 1% of ordinary accounts flagged on the validation world
+  min_recall: 0.85 # done-when: ring recall on the main dataset
+  hidden: 64
+  dropout: 0.2
+  lr: 0.01
+  weight_decay: 0.0005
+  epochs: 60
+  patience: 10 # early stopping on validation PR-AUC (accounts)
+  mlflow_experiment: graph_model

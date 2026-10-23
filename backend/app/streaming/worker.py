@@ -173,7 +173,8 @@ class Worker:
         )  # fmt: skip
         sched.add_job(
             graph_refresh.refresh, "interval", minutes=self.deps.settings.graph_refresh_minutes,
-            args=[self.redis, self.deps.sessionmaker], id="graph_refresh",
+            args=[self.redis, self.deps.sessionmaker],
+            kwargs={"model_dir": self.deps.settings.model_dir}, id="graph_refresh",
             max_instances=1, coalesce=True, next_run_time=datetime.now(UTC),  # once at start
         )  # fmt: skip
         return sched

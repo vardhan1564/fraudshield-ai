@@ -5,14 +5,17 @@ import uuid
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from decimal import Decimal
+from pathlib import Path
 
+import numpy as np
 from fastapi import FastAPI
 from redis.asyncio import Redis
 from sqlalchemy import any_, literal, select, update
 
-from app.jobs.graph_refresh import CACHE_TTL_S, refresh
+from app.jobs.graph_refresh import CACHE_TTL_S, GRAPH_MODEL, graph_model, refresh
 from app.models import GraphEdge, Payee, Ring, User
 from app.models.enums import EdgeType, RingStatus
+from ml.models import gnn
 from tests.test_scoring import app, make_user  # noqa: F401  # pytest fixtures
 
 
@@ -119,3 +122,22 @@ async def test_refresh_updates_rings_and_keeps_dismissals(app: FastAPI) -> None:
     await refresh(app.state.redis, app.state.sessionmaker)
     after = await rings_with(app, node)
     assert [(r.id, r.status) for r in after] == [(first.id, RingStatus.DISMISSED)]
+
+
+async def test_refresh_scores_with_the_graph_model(app: FastAPI, tmp_path: Path) -> None:  # noqa: F811
+    """A graph_model.pt in MODEL_DIR is loaded (once per file version) and writes graph_score."""
+    n = len(gnn.NODE_FEATURES)
+    net = gnn.GraphSAGE(n, hidden=8, dropout=0.0)
+    # Threshold 2: no account is flagged (the gnn flag itself is tested in test_graph_service).
+    model = gnn.GraphModel(net, np.zeros(n, "float32"), np.ones(n, "float32"), threshold=2.0)
+    gnn.save(model, tmp_path / GRAPH_MODEL)
+    ring = await build_ring(app)
+
+    summary = await refresh(app.state.redis, app.state.sessionmaker, model_dir=tmp_path)
+    assert summary.scored_by == "gnn"
+    assert graph_model(tmp_path) is graph_model(tmp_path)  # cached
+    col = await app.state.redis.hgetall(f"graph:{ring.collector.external_id}")
+    assert 0.0 <= float(col["graph_score"]) <= 1.0
+    assert "gnn" not in col["flags"].split(",")
+    assert "mule_suspect" in col["flags"].split(",")  # the rule ring is still found
+    assert (await refresh(app.state.redis, app.state.sessionmaker)).scored_by == "rules"

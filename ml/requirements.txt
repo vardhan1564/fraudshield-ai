@@ -10,7 +10,6 @@ kaggle==2.2.4
 # Modelling
 imbalanced-learn==0.14.2
 optuna==5.0.0
-torch-geometric==2.8.1
 transformers==5.20.1
 
 # Tracking + drift

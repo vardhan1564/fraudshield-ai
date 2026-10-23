@@ -4,7 +4,8 @@
     python -m ml.pipelines.model_cards --no-mlflow  # cards only
 
 Cards are built from what training saved next to each artifact (txn_model.meta.json,
-anomaly_model.pt, social_model.meta.json, meta_model.meta.json, thresholds.json), so refreshing
+anomaly_model.pt, social_model.meta.json, meta_model.meta.json, thresholds.json and, once
+trained, graph_model.meta.json), so refreshing
 them never retrains or changes a served model. Targets come from ml/pipelines/evaluate.py, the
 same numbers the evaluation report checks. Output: ml/models/<name>/MODEL_CARD.md.
 """
@@ -330,12 +331,75 @@ def meta_card(meta: dict[str, Any], thresholds: dict[str, Any], version: str) ->
             ],
             "Limitations": [
                 f"- {SIMULATED_NOTE}",
-                "- `graph_score` is 0 until phase 5, so its weight is 0; retrain after T5.2.",
+                "- `graph_score` is the payer's GraphSAGE score at payment time (snapshots every "
+                "few hours offline, every 5 minutes online), so offline it is slightly staler "
+                "than in production.",
             ],
             "Fairness results": [
                 f"Largest FPR gap between groups at HOLD, test split (target < "
                 f"{FPR_GAP_MAX_POINTS:.0f} points): see `ml/reports/eval_<date>.md` "
                 "(2026-10-18: city_tier 0.23, age_band 0.28 points).",
+            ],
+        },
+        version,
+    )
+
+
+def graph_card(meta: dict[str, Any], version: str) -> str:
+    end, early, val = meta["main_dataset"]["at_end"], meta["main_dataset"]["early"], meta["val"]
+    cfg, sizes = meta["config"], meta["sizes"]
+    return render(
+        "graph_model",
+        {
+            "Purpose": [
+                "Scores every account in the payment graph as a likely mule (spec 01 F3). The "
+                "worker's graph_refresh writes it to Redis `graph:{account_id}` as `graph_score` "
+                "every 5 minutes; the payer's score is an input to `meta_model`, and accounts "
+                "above the threshold get the `gnn` flag in the Graph Explorer and can form rings.",
+            ],
+            "Training data": [
+                f"Simulator worlds with seeds {cfg['train_seeds']} (training) and "
+                f"{cfg['val_seed']} (early stopping, threshold), never the served dataset (seed "
+                f"42). {sizes['train_snapshots']} {cfg['window_days']}-day graph snapshots, one "
+                f"every {cfg['train_every_days']} days: {sizes['train_accounts']:,} account rows, "
+                f"{sizes['train_mules']:,} of them mules.",
+                f"Confirmed fraud offline = payees with >= {cfg['fraud_min_reports']} earlier "
+                "reports (online: labelled cases, confirmed rings and payees).",
+            ],
+            "Features": [
+                f"GraphSAGE, 2 x SAGEConv ({cfg['hidden']} hidden), on account, payee, device and "
+                f"IP nodes. {len(meta['features'])} node features (standardised): "
+                + ", ".join(f"`{f}`" for f in meta["features"])
+                + ".",
+            ],
+            "Metrics": [
+                "| Where | Ring recall | Mule recall | Ordinary accounts flagged |",
+                "|---|---|---|---|",
+                f"| Served dataset, 1 h after each ring's last payment | {pct(end['ring_recall'])} "
+                f"| {pct(end['mule_recall'])} | {pct(end['ordinary_fpr'])} |",
+                f"| Served dataset, 6 h after each ring's first payment | "
+                f"{pct(early['ring_recall'])} | {pct(early['mule_recall'])} | "
+                f"{pct(early['ordinary_fpr'])} |",
+                f"| Validation world (all snapshots) | n/a | {pct(val['recall'])} | "
+                f"{pct(val['fpr'])} |",
+                "",
+                f"A ring counts as found when at least half its accounts score above the "
+                f"threshold. Target ring recall >= {cfg['min_recall']:.0%}. Validation PR-AUC "
+                f"{val['pr_auc']:.4f}.",
+            ],
+            "Thresholds": [
+                f"- `gnn` flag when graph_score > {meta['threshold']:.4f}: the highest threshold "
+                f"keeping the recall reached at {cfg['target_fpr']:.0%} FPR on validation.",
+            ],
+            "Limitations": [
+                f"- {SIMULATED_NOTE}",
+                "- Simulated rings are textbook (fan-in, fast forwarding, shared phones), so the "
+                "rule detectors alone already find them; real mule networks hide better.",
+                "- Not pre-trained on Elliptic (spec 03 §3 lists it): the simulator graph was "
+                "enough to meet the target.",
+            ],
+            "Fairness results": [
+                "Not measured on its own: fairness is checked on the final risk_score.",
             ],
         },
         version,
@@ -389,6 +453,8 @@ def build_all(
     meta_meta = json.loads((folder / "meta_model.meta.json").read_text(encoding="utf-8"))
     thresholds = json.loads((folder / "thresholds.json").read_text(encoding="utf-8"))
     anomaly = torch.load(folder / "anomaly_model.pt", weights_only=False)
+    graph_path = folder / "graph_model.meta.json"
+    graph_meta = json.loads(graph_path.read_text(encoding="utf-8")) if graph_path.exists() else None
 
     versions: dict[str, str] = {"txn_model": f"txn_model v{txn_meta.get('version', '?')}"}
     ieee = None
@@ -406,10 +472,15 @@ def build_all(
                                           "meta_model.pkl", "txn_data_hash",
                                           thresholds["base_models"]["txn_data_hash"]),
         }  # fmt: skip
+        if graph_meta is not None:
+            found["graph_model"] = register_latest(
+                mlflow, "graph_model", cfg["graph"]["mlflow_experiment"], "graph_model.pt",
+                "artifact_hash", graph_meta["artifact_hash"],
+            )  # fmt: skip
         versions |= {k: f"MLflow registry `{k}` v{v}" for k, v in found.items() if v}
         versions["txn_model"] = f"MLflow registry `txn_model` v{txn_meta.get('version', '?')}"
         ieee = ieee_from_mlflow(cfg["mlflow"]["experiment"])
-    for name in ("anomaly_model", "social_model", "meta_model"):
+    for name in ("anomaly_model", "social_model", "meta_model", "graph_model"):
         versions.setdefault(name, f"{name} (local, not registered)")
 
     ds = load_dataset("simulated", cfg)
@@ -424,6 +495,8 @@ def build_all(
         "social_model": lambda: social_card(social_meta, versions["social_model"]),
         "meta_model": lambda: meta_card(meta_meta, thresholds, versions["meta_model"]),
     }  # fmt: skip
+    if graph_meta is not None:
+        cards["graph_model"] = lambda: graph_card(graph_meta, versions["graph_model"])
     written: dict[str, tuple[Path, str]] = {}
     for name, make in cards.items():
         path = out_dir / name / "MODEL_CARD.md"

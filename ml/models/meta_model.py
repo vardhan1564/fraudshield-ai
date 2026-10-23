@@ -4,10 +4,12 @@
     python -m ml.models.meta_model --no-mlflow
 
 Inputs per payment: txn_score (XGBoost), anomaly_score, social_eng_score (before any Scam Coach
-answers) and graph_score (0 until phase 5). A logistic regression wrapped in isotonic calibration
-is fitted on the validation split, where the base models' scores are out-of-sample. Thresholds
-follow spec 03 §5: HOLD at FPR <= 1% and STEP_UP at FPR <= 5% on validation, chosen on
-out-of-fold predictions so the model never grades its own homework. Final metrics on test.
+answers) and graph_score: the payer's GraphSAGE score (T5.2) from the graph as it was before the
+payment (ml/models/gnn.py writes it for validation and test; without that file it stays 0).
+A logistic regression wrapped in isotonic calibration is fitted on the validation split, where
+the base models' scores are out-of-sample. Thresholds follow spec 03 §5: HOLD at FPR <= 1% and
+STEP_UP at FPR <= 5% on validation, chosen on out-of-fold predictions so the model never grades
+its own homework. Final metrics on test.
 
 One explicit rule sits on top (spec 01 F2): an unknown caller on the line while paying a new
 payee adds a fixed boost to risk_score. The learned weights barely use the call signal (screen
@@ -92,7 +94,7 @@ class BaseModels:
                 "txn_score": self.txn.inplace_predict(X[FEATURE_NAMES]),
                 "anomaly_score": self.anomaly.score(X),
                 "social_eng_score": self.social.predict(social_in),
-                "graph_score": X["graph_score"].astype("float64").to_numpy(),  # 0 until phase 5
+                "graph_score": X["graph_score"].astype("float64").to_numpy(),
             },
             index=X.index,
         )
@@ -193,6 +195,25 @@ def _report(
     return out
 
 
+def load_graph_scores(cfg: dict[str, Any]) -> pd.Series | None:
+    """Point-in-time graph_score per txn_id (python -m ml.models.gnn), or None if not built."""
+    name = cfg["datasets"]["simulated"].get("graph_scores")
+    path = ROOT / name if name else None
+    if path is None or not path.exists():
+        print(f"warning: no graph scores at {path}; graph_score stays 0 (run ml.models.gnn)")
+        return None
+    frame = pd.read_parquet(path)
+    return frame.set_index("txn_id")["graph_score"]
+
+
+def with_graph_scores(X: pd.DataFrame, scores: pd.Series | None) -> pd.DataFrame:
+    """The payer's graph_score at payment time; payers not in the graph get 0, as online."""
+    if scores is None:
+        return X
+    values = scores.reindex(X.index).fillna(0.0).to_numpy()
+    return X.assign(graph_score=values.astype(X["graph_score"].dtype))
+
+
 def split_for(ds: Dataset, cfg: dict[str, Any], base: BaseModels) -> Split:
     """The time split, after checking the saved models come from this exact train split
     (otherwise val/test scores would leak)."""
@@ -209,7 +230,9 @@ def train_meta(ds: Dataset, base: BaseModels, cfg: dict[str, Any]) -> MetaResult
     if ds.scenario is None:
         raise ValueError("the meta-model is trained on the simulated dataset")
     split = split_for(ds, cfg, base)
-    x_val, x_test = ds.X.iloc[split.val], ds.X.iloc[split.test]
+    graph = load_graph_scores(cfg)
+    x_val = with_graph_scores(ds.X.iloc[split.val], graph)
+    x_test = with_graph_scores(ds.X.iloc[split.test], graph)
     y_val, y_test = ds.y[split.val], ds.y[split.test]
     s_val, s_test = base.scores(x_val), base.scores(x_test)
 

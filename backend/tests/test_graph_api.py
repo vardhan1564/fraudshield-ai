@@ -84,7 +84,8 @@ async def test_rings_list(app: FastAPI, client: AsyncClient) -> None:  # noqa: F
     suspected = (await client.get(f"{URL}/rings?status=suspected&page_size=200",
                                   headers=analyst)).json()  # fmt: skip
     assert str(mine.id) not in {i["id"] for i in suspected["items"]}
-    other = (await client.get(f"{URL}/rings?detector=gnn", headers=analyst)).json()
-    assert other["total"] == 0
+    by_rule = (await client.get(f"{URL}/rings?detector=pass_through&page_size=200",
+                                headers=analyst)).json()  # fmt: skip
+    assert {i["detector"] for i in by_rule["items"]} == {"pass_through"}
     customer = bearer(app, await make_user(app))
     assert (await client.get(f"{URL}/rings", headers=customer)).status_code == 403

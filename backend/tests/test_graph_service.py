@@ -175,3 +175,23 @@ def test_simulator_rings_are_found(simulated: dict[str, pd.DataFrame]) -> None:
     print(f"rings found {len(found)}/20, false rings {false_rings}")
     assert len(found) >= 17
     assert false_rings <= 2
+
+
+def test_learned_scores_flag_accounts_and_form_rings() -> None:
+    """With the GNN: graph_score is its score, accounts above the threshold get `gnn` and can
+    form a ring no rule would find; rule rings stay."""
+    quiet = [sent("A:X1", "A:X2", T0, 300), sent("A:X2", "A:X3", T0 + DAY, 300)]
+    learned = {"A:X1": 0.9, "A:X2": 0.8, "A:X3": 0.95}
+    result = analyse(mini_ring() + quiet, {"A:C": T0 - 2 * DAY},
+                     aliases={"P:col@ybl": "A:C"},
+                     scorer=lambda stats: {n: learned.get(n, 0.1) for n in stats.whole
+                                           if n.startswith("A:")},
+                     threshold=0.5)  # fmt: skip
+    assert result.scored_by == "gnn"
+    x1 = result.accounts["A:X1"]
+    assert x1.graph_score == 0.9 and x1.flags == ("gnn", "mule_suspect")
+    assert result.accounts["A:C"].graph_score == 0.1  # the model's score, not the rule score
+    by_members = {r.members: r for r in result.rings}
+    assert by_members[("A:X1", "A:X2", "A:X3")].detector == "gnn"
+    assert by_members[("A:X1", "A:X2", "A:X3")].score == 0.9  # median member score
+    assert by_members[("A:C", "A:L1", "A:L2")].score == 1.0  # rule ring unchanged

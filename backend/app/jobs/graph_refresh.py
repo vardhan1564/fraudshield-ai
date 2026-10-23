@@ -6,6 +6,9 @@ runs in a thread so the stream consumers keep going meanwhile.
 
 Accounts are keyed by external id when the user has one (that is what partners send as
 `user_id`), else by UUID; the cache is written under both so scoring finds it either way.
+
+`graph_score` comes from the GraphSAGE model (T5.2) in MODEL_DIR/graph_model.pt, reloaded when the
+file changes; without the file it is the rule-based score.
 """
 
 import asyncio
@@ -13,6 +16,9 @@ import logging
 import time
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from functools import partial
+from pathlib import Path
+from typing import TYPE_CHECKING
 
 from redis.asyncio import Redis
 from redis.typing import EncodableT, FieldT
@@ -23,12 +29,18 @@ from app.models import Alert, Case, GraphEdge, Payee, Ring, Transaction, User
 from app.models.enums import CaseLabel, RingStatus
 from app.services.graph_service import Edge, FoundRing, GraphResult, analyse
 
+if TYPE_CHECKING:
+    from ml.models.gnn import GraphModel
+
 logger = logging.getLogger(__name__)
 
 WINDOW = timedelta(days=30)
 CACHE_TTL_S = 600  # spec 05: graph:{account_id} lives 10 min, refreshed every 5
 SAME_RING = 0.5  # Jaccard overlap at which a new finding updates an existing ring
 WRITE_BATCH = 1000
+GRAPH_MODEL = "graph_model.pt"
+
+_models: dict[Path, tuple[float, "GraphModel"]] = {}  # path -> (file mtime, model)
 
 
 @dataclass(frozen=True)
@@ -47,6 +59,20 @@ class RefreshSummary:
     rings_new: int
     rings_updated: int
     seconds: float
+    scored_by: str  # "gnn" or "rules"
+
+
+def graph_model(model_dir: Path | None) -> "GraphModel | None":
+    """The GNN from model_dir, loaded once per file version; None when there is none."""
+    if model_dir is None or not (path := model_dir / GRAPH_MODEL).exists():
+        return None
+    mtime = path.stat().st_mtime
+    if (hit := _models.get(path)) is None or hit[0] != mtime:
+        from ml.models import gnn  # torch + PyTorch Geometric: only loaded where needed
+
+        _models[path] = (mtime, gnn.load(path))
+        logger.info("graph model loaded", extra={"path": str(path)})
+    return _models[path][1]
 
 
 def account_node(user: User) -> str:
@@ -152,19 +178,27 @@ async def save_rings(
 
 
 async def refresh(
-    redis: Redis, sessionmaker: async_sessionmaker[AsyncSession], now: datetime | None = None
+    redis: Redis,
+    sessionmaker: async_sessionmaker[AsyncSession],
+    now: datetime | None = None,
+    model_dir: Path | None = None,
 ) -> RefreshSummary:
     now = now or datetime.now(UTC)
     started = time.perf_counter()
     async with sessionmaker() as session:
         data = await load(session, now)
-    result = await asyncio.to_thread(analyse, data.edges, data.created, data.fraud, data.aliases)
+    model = await asyncio.to_thread(graph_model, model_dir)
+    run = partial(analyse, data.edges, data.created, data.fraud, data.aliases)
+    if model is not None:
+        run = partial(run, scorer=partial(model.score, now=now.timestamp()),
+                      threshold=model.threshold)  # fmt: skip
+    result = await asyncio.to_thread(run)
     await write_cache(redis, result, data.uuid_of)
     async with sessionmaker() as session:
         new, updated = await save_rings(session, result.rings, now)
     summary = RefreshSummary(
         len(data.edges), len(result.accounts), new, updated,
-        round(time.perf_counter() - started, 2),
+        round(time.perf_counter() - started, 2), result.scored_by,
     )  # fmt: skip
     logger.info("graph refreshed", extra=summary.__dict__)
     return summary
