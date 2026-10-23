@@ -7,6 +7,7 @@ from app.api.v1 import (
     audit_log,
     auth,
     cases,
+    graph,
     health,
     metrics,
     model_versions,
@@ -22,6 +23,7 @@ api_router.include_router(auth.router)
 api_router.include_router(transactions.router)
 api_router.include_router(alerts.router)
 api_router.include_router(cases.router)
+api_router.include_router(graph.router)
 api_router.include_router(payees.router)
 api_router.include_router(rules.router)
 api_router.include_router(model_versions.router)

@@ -4,7 +4,8 @@ Each consumer reads stream:transactions.scored in its own consumer group (named 
 every consumer sees every event. A message is tried up to 3 times; after the third failure it is
 copied to stream:dead and acknowledged. On start a consumer first finishes the messages it had
 in flight before a crash; messages left by a dead worker are claimed after CLAIM_IDLE_MS.
-APScheduler runs the periodic jobs (now: outbox replay; graph, approvals and drift come later).
+APScheduler runs the periodic jobs: outbox replay and graph_refresh (approvals and drift come
+later).
 """
 
 import asyncio
@@ -14,6 +15,7 @@ import os
 import socket
 from collections.abc import Sequence
 from dataclasses import dataclass
+from datetime import UTC, datetime
 from typing import Any
 
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
@@ -24,6 +26,7 @@ from app.core.config import Settings, get_settings
 from app.core.db import make_engine, make_sessionmaker
 from app.core.logging import setup_logging
 from app.core.redis import make_redis
+from app.jobs import graph_refresh
 from app.services.llm import build_chain
 from app.streaming import bus
 from app.streaming.consumers import (
@@ -167,6 +170,11 @@ class Worker:
             bus.replay_outbox, "interval", seconds=OUTBOX_EVERY_S,
             args=[self.redis, self.deps.sessionmaker], id="outbox_replay",
             max_instances=1, coalesce=True,
+        )  # fmt: skip
+        sched.add_job(
+            graph_refresh.refresh, "interval", minutes=self.deps.settings.graph_refresh_minutes,
+            args=[self.redis, self.deps.sessionmaker], id="graph_refresh",
+            max_instances=1, coalesce=True, next_run_time=datetime.now(UTC),  # once at start
         )  # fmt: skip
         return sched
 
