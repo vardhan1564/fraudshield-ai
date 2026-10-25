@@ -183,6 +183,45 @@
       "count_other": "{{count}} people have now reported {{payee}}.",
       "warnOthers": "We will warn others before they pay this UPI ID.",
       "another": "Report another scam"
+    },
+    "coach": {
+      "title_one": "Wait. Answer {{count}} quick question first",
+      "title_other": "Wait. Answer {{count}} quick questions first",
+      "body": "Scammers keep you on the phone and rush you. Your bank, the police and courts never ask you to pay on a call.",
+      "questions": "Questions",
+      "q": {
+        "on_call_instructed": "Is someone on a call telling you to make this payment?",
+        "threat_or_arrest": "Did anyone say you'll be arrested, fined or your account blocked?",
+        "refund_to_receive": "Are you paying to receive a refund, prize or cashback?",
+        "promised_returns": "Were you promised high or guaranteed returns?",
+        "asked_secrecy": "Were you told not to tell family or the bank?",
+        "know_payee": "Have you met or paid this person before?"
+      },
+      "yes": "Yes",
+      "no": "No",
+      "answerAll": "Answer every question to continue.",
+      "check": "Check my answers",
+      "checking": "Checking…",
+      "coolingRunning": "Cooling-off time: {{left}} left. Take your time, there is no hurry.",
+      "coolingDone": "Cooling-off time is over.",
+      "passedTitle": "Thank you. Your answers look safe",
+      "passedBody": "For your safety you can pay when the cooling-off time is over. Still unsure? Call your bank first.",
+      "payNow": "Pay now",
+      "payAfter": "You can pay after the cooling-off time",
+      "callBank": "Call my bank ({{number}})",
+      "error": "Could not check your answers",
+      "already": "These questions were already answered",
+      "heldTitle": "We stopped this payment to protect you",
+      "heldBody": "Your answers match a common scam. Your money has not left your account.",
+      "tipsTitle": "What your answers tell us",
+      "tips": {
+        "on_call_instructed": "Hang up now. Anyone telling you on a call to send money is a scammer, even if they say they are from your bank or the police.",
+        "threat_or_arrest": "There is no \"digital arrest\". Police and courts never ask for money on a phone or video call.",
+        "refund_to_receive": "You never pay to receive a refund, prize or cashback. This is a scam.",
+        "promised_returns": "Guaranteed high returns are a trap. Real investments never promise them.",
+        "asked_secrecy": "Scammers ask you to keep secrets. Talk to your family or your bank now.",
+        "know_payee": "Never send money to someone you have not met or paid before because a caller told you to."
+      }
     }
   },
   "errors": {

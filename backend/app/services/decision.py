@@ -6,6 +6,12 @@
 3. Admin rules (rules table): a hit raises the decision to the rule's action, never lowers it.
 4. Action: HOLD -> ANALYST_REVIEW; STEP_UP -> SCAM_COACH when it looks like social engineering
    (spec 01 F1 trigger), else OTP; APPROVE -> NONE. TRUSTED_CONTACT comes with T5.6.
+5. Coach first (T5.4, spec 01 F1): a payment with scam signals (unknown caller, screen sharing,
+   a reported payee) that would be held is answered STEP_UP + SCAM_COACH instead, and the held
+   decision is kept in `model_decision`. The trained models hold almost every payment made on a
+   scam call, so without this the coach would never be seen. After the answers
+   (services/scam_coach.py) the final decision is never below `model_decision`: the coach can only
+   raise a decision, never release a payment the models would hold.
 """
 
 import operator
@@ -29,16 +35,6 @@ OPS: dict[str, Callable[[Any, Any], bool]] = {
     "!=": operator.ne,
 }
 
-# spec 01 F1 question bank: key -> (question, red-flag answer)
-QUESTIONS: dict[str, tuple[str, bool]] = {
-    "on_call_instructed": ("Is someone on a call telling you to make this payment?", True),
-    "threat_or_arrest": ("Did anyone say you'll be arrested, fined or your account blocked?", True),
-    "refund_to_receive": ("Are you paying to receive a refund, prize or cashback?", True),
-    "promised_returns": ("Were you promised high or guaranteed returns?", True),
-    "asked_secrecy": ("Were you told not to tell family or the bank?", True),
-    "know_payee": ("Have you met or paid this person before?", False),
-}
-
 
 @dataclass(frozen=True)
 class ActiveRule:
@@ -55,7 +51,8 @@ class Outcome:
     decision: Decision
     action: Action
     rule_hits: list[str] = field(default_factory=list)
-    coach_questions: list[str] = field(default_factory=list)  # QUESTIONS keys
+    # what the models and rules decided; differs from `decision` only when the coach goes first
+    model_decision: Decision | None = None
 
 
 def rule_matches(condition: dict[str, Any], values: dict[str, Any]) -> bool:
@@ -84,6 +81,15 @@ def from_score(risk: float, step_up: float, hold: float) -> Decision:
     return Decision.APPROVE
 
 
+def scam_signals(features: dict[str, Any]) -> bool:
+    """Signs the customer is being talked into this payment (spec 01 F1/F2)."""
+    return (
+        bool(features["ctx_unknown_call"])
+        or bool(features["ctx_screen_share"])
+        or int(features["payee_report_count"]) > 0
+    )
+
+
 def decide(
     risk: float,
     step_up: float,
@@ -91,7 +97,9 @@ def decide(
     features: dict[str, Any],
     social_eng_score: float,
     rules: Sequence[ActiveRule] = (),
+    coach_first: bool = True,
 ) -> Outcome:
+    """`coach_first=False` after the coach has been answered (no second round of questions)."""
     decision = from_score(risk, step_up, hold)
     hits: list[str] = []
     if int(features["payee_report_count"]) >= REPORTED_PAYEE_MIN:
@@ -103,34 +111,16 @@ def decide(
             decision = max(decision, rule.action, key=RANK.__getitem__)
 
     if decision == Decision.HOLD:
-        return Outcome(decision, "ANALYST_REVIEW", hits)
+        if coach_first and scam_signals(features):
+            return Outcome(Decision.STEP_UP, "SCAM_COACH", hits, Decision.HOLD)
+        return Outcome(decision, "ANALYST_REVIEW", hits, decision)
     if decision == Decision.APPROVE:
-        return Outcome(decision, "NONE", hits)
+        return Outcome(decision, "NONE", hits, decision)
     social = (
         social_eng_score >= SOCIAL_COACH_MIN
         or int(features["payee_report_count"]) > 0
         or bool(features["ctx_unknown_call"])
     )
-    if social:
-        return Outcome(decision, "SCAM_COACH", hits, coach_questions(features))
-    return Outcome(decision, "OTP", hits)
-
-
-def coach_questions(features: dict[str, Any]) -> list[str]:
-    """2-3 questions that fit the signals (spec 01 F1), most telling first."""
-    picks: list[str] = []
-    if features["ctx_unknown_call"] or features["ctx_call_long"]:
-        picks += ["on_call_instructed", "threat_or_arrest"]
-    if features["ctx_screen_share"]:
-        picks.append("asked_secrecy")
-    if features["payee_is_new"]:
-        picks.append("know_payee")
-    if features["merchant_category"] == "P2P":
-        picks.append("refund_to_receive")
-    unique = list(dict.fromkeys(picks))[:3]
-    for filler in ("promised_returns", "refund_to_receive", "know_payee"):  # F1: at least 2
-        if len(unique) >= 2:
-            break
-        if filler not in unique:
-            unique.append(filler)
-    return unique
+    if social and coach_first:
+        return Outcome(decision, "SCAM_COACH", hits, decision)
+    return Outcome(decision, "OTP", hits, decision)

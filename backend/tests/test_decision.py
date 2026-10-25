@@ -1,9 +1,10 @@
-"""Decision rules (spec 03 §5, PRD §8, spec 01 F1): pure functions, no services needed."""
+"""Decision rules (spec 03 §5, PRD §8, spec 01 F1): pure functions, no services needed.
+Question choice and the coach's answers: test_scam_coach.py."""
 
 from typing import Any
 
 from app.models.enums import Decision
-from app.services.decision import QUESTIONS, ActiveRule, coach_questions, decide, rule_matches
+from app.services.decision import ActiveRule, decide, rule_matches
 
 STEP_UP, HOLD = 0.1, 0.5
 
@@ -42,9 +43,27 @@ def test_scam_coach_trigger_spec_01_f1() -> None:
     ):
         out = decide(0.2, STEP_UP, HOLD, reason["f"], reason["social"])
         assert out.action == "SCAM_COACH"
-        assert 2 <= len(out.coach_questions) <= 3
-        assert len(set(out.coach_questions)) == len(out.coach_questions)
-        assert set(out.coach_questions) <= set(QUESTIONS)
+        assert out.decision == out.model_decision == Decision.STEP_UP
+
+
+def test_coach_goes_first_on_a_scam_signal_hold() -> None:
+    """T5.4: the models hold scam-call payments outright; the coach still asks first, and the
+    held decision is kept for after the answers."""
+    for f in (feats(ctx_unknown_call=True), feats(ctx_screen_share=True),
+              feats(payee_report_count=2)):  # fmt: skip
+        out = decide(0.9, STEP_UP, HOLD, f, 0.95)
+        assert (out.decision, out.action, out.model_decision) == (
+            Decision.STEP_UP, "SCAM_COACH", Decision.HOLD,
+        )  # fmt: skip
+    # no scam signal (e.g. a stolen phone): held at once, as before
+    plain = decide(0.9, STEP_UP, HOLD, feats(), 0.0)
+    assert (plain.decision, plain.action) == (Decision.HOLD, "ANALYST_REVIEW")
+
+
+def test_no_second_coach_after_the_answers() -> None:
+    f = feats(ctx_unknown_call=True)
+    assert decide(0.9, STEP_UP, HOLD, f, 0.9, coach_first=False).action == "ANALYST_REVIEW"
+    assert decide(0.2, STEP_UP, HOLD, f, 0.9, coach_first=False).action == "OTP"
 
 
 def test_reported_payee_is_at_least_step_up_prd_8() -> None:
@@ -78,9 +97,3 @@ def test_rule_conditions() -> None:
         {"all": [{"field": "merchant_category", "op": ">", "value": 1}]}, values
     )
     assert not rule_matches({"none": []}, values)
-
-
-def test_coach_questions_fit_the_signals() -> None:
-    on_call = coach_questions(feats(ctx_unknown_call=True, payee_is_new=True))
-    assert on_call[:2] == ["on_call_instructed", "threat_or_arrest"] and len(on_call) == 3
-    assert len(coach_questions(feats())) == 2  # padded to the minimum

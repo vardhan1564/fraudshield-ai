@@ -78,13 +78,14 @@ class ModelRegistry:
         logger.info("models loaded", extra={"model_version": registry.version})
         return registry
 
-    def predict(self, features: dict[str, Any]) -> ModelOutput:
-        """CPU-bound (~10 ms): call it from a worker thread, not the event loop."""
+    def predict(self, features: dict[str, Any], coach_red_flags: int = 0) -> ModelOutput:
+        """CPU-bound (~10 ms). `coach_red_flags`: the Scam Coach's count (spec 01 F1); the first
+        decision has no answers yet, so 0 (as BaseModels.scores)."""
         row = encode(features)
         dmatrix = xgb.DMatrix(row.astype("float32"), feature_names=FEATURE_NAMES,
                               feature_types=TYPES, enable_categorical=True, nthread=1)  # fmt: skip
         social_in = row[:, SOCIAL_IDX]
-        social_in[:, COACH] = 0.0  # first decision: no coach answers yet (as BaseModels.scores)
+        social_in[:, COACH] = float(coach_red_flags)
         scores = {
             "txn_score": float(self.base.txn.predict(dmatrix)[0]),
             "anomaly_score": self._anomaly(row),

@@ -40,7 +40,7 @@ test("a normal ₹200 payment succeeds", async ({ page }) => {
   await expect(page.getByRole("heading", { name: /^Hello/ })).toBeVisible();
 });
 
-test("a scam-call payment shows the warning, and Cancel keeps the money", async ({ page }) => {
+test("a scam-call payment asks the Scam Coach questions, and Cancel keeps the money", async ({ page }) => {
   await signIn(page);
   await page.getByRole("link", { name: "Settings" }).click();
   await page.getByRole("button", { name: "Scam call" }).click();
@@ -52,10 +52,9 @@ test("a scam-call payment shows the warning, and Cancel keeps the money", async 
   await page.getByLabel("Amount").fill("48500");
   await page.getByRole("button", { name: "Pay", exact: true }).click();
 
-  await expect(page).toHaveURL(/\/app\/pay\/[^/]+\/warning$/);
-  const alert = page.getByRole("alert");
-  await expect(alert.getByRole("heading", { name: /We have paused this payment|This payment may be a scam/ })).toBeVisible();
-  await expect(page.getByText("Why we are worried")).toBeVisible();
+  // coach first (T5.4): the questions come before any decision is shown
+  await expect(page).toHaveURL(/\/app\/pay\/[^/]+\/coach$/);
+  await expect(page.getByRole("alert").getByRole("heading", { name: /^Wait\. Answer \d quick questions first$/ })).toBeVisible();
 
   await page.getByRole("button", { name: "Cancel payment" }).click();
   await expect(page.getByText("Your money is safe.")).toBeVisible();

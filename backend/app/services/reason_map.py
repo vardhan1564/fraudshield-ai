@@ -191,7 +191,7 @@ NUMERIC: dict[str, tuple[Callable[[float], dict[str, str]], Text]] = {
     "coach_red_flags": (
         lambda v: {"x": num(v)},
         {
-            EN: "{x} warning signs in your answers",
+            EN: "Warning signs in your answers: {x}",
             HI: "आपके जवाबों में {x} खतरे के संकेत",
             MR: "तुमच्या उत्तरांमध्ये {x} धोक्याची चिन्हे",
         },

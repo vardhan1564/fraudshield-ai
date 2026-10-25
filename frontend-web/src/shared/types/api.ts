@@ -134,6 +134,27 @@ export interface ScoreResponse {
   latency_ms: number;
 }
 
+/** Spec 01 F1 question keys (the question bank). */
+export type CoachKey =
+  | "on_call_instructed" | "threat_or_arrest" | "refund_to_receive"
+  | "promised_returns" | "asked_secrecy" | "know_payee";
+
+/** POST /transactions/{id}/coach (spec 04 §2.2): one yes/no per question asked. */
+export interface CoachRequest {
+  answers: Record<string, boolean>;
+}
+
+export interface CoachResponse {
+  txn_id: string;
+  risk_score: number;
+  decision: Decision;
+  action: Action;
+  explanation: string;
+  explanation_status: "ready" | "pending";
+  top_reasons: Reason[];
+  red_flags: number;
+}
+
 export interface ExplainResponse {
   txn_id: string;
   shap: Reason[]; // top 10 by |impact|, both directions

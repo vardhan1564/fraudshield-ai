@@ -5,6 +5,7 @@ import { Link, Navigate, useNavigate, useParams } from "react-router-dom";
 
 import { useCustomerSocket } from "@/customer/hooks/useCustomerSocket";
 import { usePaymentResult } from "@/customer/hooks/usePaymentResult";
+import { BANK_PHONE, HELPLINE, isCoachKey } from "@/customer/lib/coach";
 import { type PaymentResult, rememberPayment } from "@/customer/state/payments";
 import { EmptyState } from "@/shared/components/EmptyState";
 import { ReasonList } from "@/shared/components/ReasonList";
@@ -15,10 +16,8 @@ import { cn } from "@/shared/lib/cn";
 import { formatInr, maskVpa } from "@/shared/lib/format";
 import type { CustomerMessage } from "@/shared/types/api";
 
-/** India's national cyber-fraud helpline: a real, free number, safe to dial in a demo. */
-export const HELPLINE = "1930";
 
-function Summary({ result }: { result: PaymentResult }) {
+export function Summary({ result }: { result: PaymentResult }) {
   const { t } = useTranslation();
   return (
     <div className="rounded-2xl border bg-card p-4">
@@ -73,6 +72,8 @@ export function RiskWarningPage() {
   if (result.decision === "APPROVE") return <Navigate to={`/app/pay/${encodeURIComponent(txnId)}/done`} replace state={result} />;
 
   const held = result.decision === "HOLD";
+  // stopped by the customer's own Scam Coach answers: say which answers worried us, and why
+  const flagged = held ? (result.flagged ?? []).filter(isCoachKey) : [];
   const explanation = live ?? result.explanation;
   const cancel = () => {
     toast({ tone: "success", title: t("customer.warning.cancelled"), body: t("customer.warning.cancelledBody") });
@@ -95,15 +96,28 @@ export function RiskWarningPage() {
       >
         {held ? <OctagonPause className="size-12" aria-hidden="true" /> : <TriangleAlert className="size-12" aria-hidden="true" />}
         <h1 className="mt-3 text-2xl font-bold leading-tight">
-          {t(held ? "customer.warning.heldTitle" : "customer.warning.checkTitle")}
+          {t(flagged.length ? "customer.coach.heldTitle" : held ? "customer.warning.heldTitle" : "customer.warning.checkTitle")}
         </h1>
         <p className="mt-2 text-lg leading-snug text-white/95">
-          {t(held ? "customer.warning.heldBody" : "customer.warning.checkBody")}
+          {t(flagged.length ? "customer.coach.heldBody" : held ? "customer.warning.heldBody" : "customer.warning.checkBody")}
         </p>
       </header>
 
       <div className="space-y-5 px-5 pt-5">
         <Summary result={result} />
+
+        {flagged.length > 0 && (
+          <section className="space-y-3">
+            <h2 className="text-lg font-semibold">{t("customer.coach.tipsTitle")}</h2>
+            <ul className="space-y-2">
+              {flagged.map((key) => (
+                <li key={key} className="rounded-2xl border-2 border-destructive/40 bg-destructive/5 px-4 py-3 text-lg leading-snug">
+                  {t(`customer.coach.tips.${key}`)}
+                </li>
+              ))}
+            </ul>
+          </section>
+        )}
 
         <section className="space-y-3">
           <h2 className="text-lg font-semibold">{t("customer.warning.why")}</h2>
@@ -125,10 +139,17 @@ export function RiskWarningPage() {
             {t("customer.warning.cancel")}
           </Button>
           {held ? (
-            <a href={`tel:${HELPLINE}`} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-14 w-full text-lg")}>
-              <Phone aria-hidden="true" />
-              {t("customer.warning.callHelpline", { number: HELPLINE })}
-            </a>
+            <>
+              <a href={`tel:${BANK_PHONE}`} className={cn(buttonVariants({ variant: "outline", size: "lg" }), "h-14 w-full text-lg")}>
+                <Phone aria-hidden="true" />
+                {t("customer.coach.callBank", { number: BANK_PHONE })}
+              </a>
+              {BANK_PHONE !== HELPLINE && (
+                <a href={`tel:${HELPLINE}`} className="flex min-h-11 items-center justify-center gap-2 text-base font-medium text-primary underline underline-offset-4">
+                  {t("customer.warning.callHelpline", { number: HELPLINE })}
+                </a>
+              )}
+            </>
           ) : (
             <button
               type="button"

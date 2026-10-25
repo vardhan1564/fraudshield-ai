@@ -1,4 +1,4 @@
-import type { Reason, ScoreResponse } from "@/shared/types/api";
+import type { CoachQuestion, Reason, ScoreResponse } from "@/shared/types/api";
 
 /** What the warning and done screens show; kept for this tab so a reload doesn't lose it. */
 export interface PaymentResult {
@@ -13,6 +13,11 @@ export interface PaymentResult {
   explanationPending: boolean;
   /** The customer went ahead after an extra-check warning. */
   continued?: boolean;
+  /** Scam Coach (T5.4): the questions to ask, when the coach started (ms), and once answered,
+   * the keys answered with a warning sign. */
+  coachQuestions?: CoachQuestion[];
+  coachStartedAt?: number;
+  flagged?: string[];
 }
 
 const KEY = "fraudshield.payments";
@@ -50,5 +55,6 @@ export function fromScore(response: ScoreResponse, payee: string, amount: number
     reasons: response.top_reasons,
     explanation: response.explanation,
     explanationPending: response.explanation_status === "pending",
+    coachQuestions: response.coach_questions,
   };
 }

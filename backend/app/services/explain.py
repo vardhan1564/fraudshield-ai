@@ -35,6 +35,7 @@ MIN_IMPACT = 0.05  # reasons 4 and 5 only when they matter
 RULE_FEATURES = {
     "unknown_call_new_payee": "ctx_unknown_call",
     "reported_payee": "payee_report_count",
+    "coach_red_flags": "coach_red_flags",  # T5.4: a red-flag answer is the first reason
 }
 
 
@@ -140,6 +141,21 @@ TEMPLATES: dict[str, dict[Language, str]] = {
         Language.HI: "हमने यह भुगतान रोक दिया है। कारण: {reasons}। एक विश्लेषक इसकी जाँच करेगा।",
         Language.MR: "आम्ही हे पेमेंट थांबवले आहे. कारण: {reasons}. एक विश्लेषक ते तपासेल.",
     },
+    # T5.4: held because of the customer's own Scam Coach answers
+    "COACH_HOLD": {
+        Language.EN: (
+            "We stopped this payment because your answers match a common scam. "
+            "Flagged because: {reasons}. Please call your bank before you pay anyone."
+        ),
+        Language.HI: (
+            "हमने यह भुगतान रोक दिया है क्योंकि आपके जवाब एक आम धोखाधड़ी से मिलते हैं। "
+            "कारण: {reasons}। किसी को भी भुगतान करने से पहले अपने बैंक को फ़ोन करें।"
+        ),
+        Language.MR: (
+            "आम्ही हे पेमेंट थांबवले आहे कारण तुमची उत्तरे एका सामान्य फसवणुकीशी जुळतात. "
+            "कारण: {reasons}. कोणालाही पैसे देण्यापूर्वी तुमच्या बँकेला फोन करा."
+        ),
+    },
     "SCAM_COACH": {
         Language.EN: (
             "Before you pay, please answer a few quick questions. Flagged because: {reasons}."
@@ -163,11 +179,16 @@ TEMPLATES: dict[str, dict[Language, str]] = {
 
 
 def template_sentence(
-    decision: Decision, action: str, reasons: list[str], language: Language
+    decision: Decision,
+    action: str,
+    reasons: list[str],
+    language: Language,
+    coach_flagged: bool = False,
 ) -> str:
-    """Spec 01 F4 fallback ("Flagged because: r1, r2, r3."), worded for the decision."""
+    """Spec 01 F4 fallback ("Flagged because: r1, r2, r3."), worded for the decision.
+    `coach_flagged`: held because of a red-flag Scam Coach answer (spec 01 F1 step 5)."""
     if decision == Decision.HOLD:
-        key = "HOLD"
+        key = "COACH_HOLD" if coach_flagged else "HOLD"
     elif decision == Decision.STEP_UP:
         key = "SCAM_COACH" if action == "SCAM_COACH" else "STEP_UP"
     else:

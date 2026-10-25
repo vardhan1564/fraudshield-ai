@@ -118,7 +118,8 @@ describe("Customer app: Pay (spec 07 §3, §5)", () => {
     expect(within(alert).getByRole("heading", { name: "We have paused this payment" })).toBeInTheDocument();
     expect(screen.getByText("First payment to this payee")).toBeInTheDocument();
     expect(screen.queryByText(/0\.9/)).not.toBeInTheDocument(); // never a score
-    expect(screen.getByRole("link", { name: "Call cyber-fraud helpline 1930" })).toHaveAttribute("href", "tel:1930");
+    // "Call my bank" dials the bank's fraud line (VITE_BANK_PHONE), else the 1930 helpline (T5.4)
+    expect(screen.getByRole("link", { name: "Call my bank (1930)" })).toHaveAttribute("href", "tel:1930");
     expect(screen.queryByRole("button", { name: /Pay anyway/ })).not.toBeInTheDocument();
     expect(sent[0]?.context).toMatchObject({ on_call: true, caller_in_contacts: false, screen_share_active: true, remote_access_app: "AnyDesk" });
   });

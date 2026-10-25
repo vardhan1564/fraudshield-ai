@@ -27,8 +27,8 @@ from app.ml_runtime.registry import ModelOutput, ModelRegistry
 from app.models import User
 from app.models.enums import Decision, Role
 from app.schemas.transactions import CoachQuestion, ModelScores, ScoreRequest, ScoreResponse
-from app.services import explain
-from app.services.decision import QUESTIONS, decide
+from app.services import explain, scam_coach
+from app.services.decision import decide
 from app.services.features import PaymentIn, build_features, record
 from app.services.rules import VERSION_KEY, RuleCache
 from app.streaming import bus
@@ -108,6 +108,9 @@ class Scored:
 
     out: ModelOutput
     shap_top: list[dict[str, Any]]  # explain.ranked(): stored in model_scores.shap_json
+    features: dict[str, Any]  # kept for the Scam Coach's re-score (T5.4)
+    coach_questions: list[str]
+    model_decision: Decision  # differs from the response's decision when the coach goes first
 
 
 async def score(
@@ -156,6 +159,7 @@ async def score(
         out.contributions, features, [*out.rule_hits, *outcome.rule_hits], registry.boost
     )
     reasons = explain.top_reasons(stored, user.language)
+    questions = scam_coach.questions_for(features) if outcome.action == "SCAM_COACH" else []
     response = ScoreResponse(
         txn_id=body.txn_id,
         risk_score=round(out.risk_score, 4),
@@ -173,14 +177,15 @@ async def score(
         ),
         explanation_status="ready" if outcome.decision == Decision.APPROVE else "pending",
         coach_questions=[
-            CoachQuestion(key=k, text=QUESTIONS[k][0]) for k in outcome.coach_questions
+            CoachQuestion(key=k, text=scam_coach.QUESTIONS[k].text) for k in questions
         ],
         model_version=registry.version,
         degraded=[] if has_graph else ["graph"],  # graph scores arrive with phase 5
         latency_ms=0,
     )
     response.latency_ms = int((time.perf_counter() - started) * 1000)
-    return response, user, Scored(out, stored)
+    model_decision = outcome.model_decision or outcome.decision
+    return response, user, Scored(out, stored, features, questions, model_decision)
 
 
 async def after_response(
@@ -201,6 +206,13 @@ async def after_response(
     except RedisError:
         logger.exception("feature state update failed", extra={"txn_id": body.txn_id})
     event = scored_event(body, response, user, scored)
+    if scored.coach_questions:  # before the event: the app may post answers within seconds
+        try:
+            await scam_coach.save_context(
+                redis, event, scored.features, scored.coach_questions, scored.model_decision
+            )
+        except RedisError:
+            logger.exception("coach context not saved", extra={"txn_id": body.txn_id})
     try:
         await redis.xadd(
             settings.stream_scored, bus.encode(event), maxlen=bus.STREAM_MAXLEN, approximate=True

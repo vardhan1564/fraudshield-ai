@@ -37,9 +37,9 @@ class StubRegistry:
 
     step_up, hold, boost, version = 0.1, 0.5, 0.25, "ensemble-test"
 
-    def predict(self, features: dict[str, Any]) -> ModelOutput:
+    def predict(self, features: dict[str, Any], coach_red_flags: int = 0) -> ModelOutput:
         risk = min(1.0, features["amount"] / 100_000)
-        social = 0.9 if features["ctx_unknown_call"] else 0.05
+        social = min(1.0, (0.9 if features["ctx_unknown_call"] else 0.05) + 0.05 * coach_red_flags)
         return ModelOutput(
             scores={"txn_score": risk, "anomaly_score": 0.1, "social_eng_score": social,
                     "graph_score": 0.0},

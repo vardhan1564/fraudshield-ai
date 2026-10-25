@@ -68,7 +68,7 @@ export function PayPage() {
     },
     onSuccess: (result) => {
       rememberPayment(result);
-      const next = result.decision === "APPROVE" ? "done" : "warning";
+      const next = result.decision === "APPROVE" ? "done" : result.action === "SCAM_COACH" ? "coach" : "warning";
       navigate(`/app/pay/${encodeURIComponent(result.txnId)}/${next}`, { state: result });
     },
   });

@@ -91,6 +91,28 @@ class ScoreResponse(BaseModel):
     latency_ms: int
 
 
+class CoachRequest(BaseModel):
+    """POST /transactions/{id}/coach (spec 04 §2.2): one yes/no answer per question asked."""
+
+    model_config = ConfigDict(extra="forbid")
+
+    answers: dict[str, bool] = Field(min_length=1, max_length=6)
+
+
+class CoachResponse(BaseModel):
+    """Spec 04 §2.2 plus (T5.4) the reasons, the red-flag count and the sentence status, so the
+    app can show the tailored warning without another call."""
+
+    txn_id: str
+    risk_score: float
+    decision: Decision
+    action: Action
+    explanation: str
+    explanation_status: Literal["ready", "pending"]
+    top_reasons: list[Reason]
+    red_flags: int
+
+
 class ExplainResponse(BaseModel):
     """GET /transactions/{id}/explain (spec 04 §2.3): the stored top 10 SHAP values."""
 

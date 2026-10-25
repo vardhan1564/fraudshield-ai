@@ -1,5 +1,7 @@
 import { get, post } from "@/shared/api/client";
 import type {
+  CoachRequest,
+  CoachResponse,
   ExplainResponse,
   Language,
   Page,
@@ -12,6 +14,11 @@ import type {
 
 export function scorePayment(body: ScoreRequest): Promise<ScoreResponse> {
   return post<ScoreResponse>("/transactions/score", body);
+}
+
+/** Scam Coach answers for the customer's own payment (by its client txn_id). */
+export function answerCoach(txnId: string, body: CoachRequest): Promise<CoachResponse> {
+  return post<CoachResponse>(`/transactions/${encodeURIComponent(txnId)}/coach`, body);
 }
 
 export function listTransactions(filters: TxnFilters = {}): Promise<Page<TxnItem>> {

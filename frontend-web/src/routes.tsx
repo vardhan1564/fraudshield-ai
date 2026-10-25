@@ -6,6 +6,7 @@ import { PayPage } from "@/customer/pages/PayPage";
 import { PaymentDonePage } from "@/customer/pages/PaymentDonePage";
 import { ReportPage } from "@/customer/pages/ReportPage";
 import { RiskWarningPage } from "@/customer/pages/RiskWarningPage";
+import { ScamCoachPage } from "@/customer/pages/ScamCoachPage";
 import { SettingsPage } from "@/customer/pages/SettingsPage";
 import { DashboardLayout } from "@/dashboard/layout/DashboardLayout";
 import { ALL_NAV } from "@/dashboard/layout/nav";
@@ -77,6 +78,7 @@ export const routes: RouteObject[] = [
           { index: true, element: <HomePage /> },
           { path: "pay", element: <PayPage /> },
           { path: "pay/:txnId/warning", element: <RiskWarningPage /> },
+          { path: "pay/:txnId/coach", element: <ScamCoachPage /> },
           { path: "pay/:txnId/done", element: <PaymentDonePage /> },
           { path: "report", element: <ReportPage /> },
           { path: "safety", element: <CustomerPlaceholder index={3} /> },

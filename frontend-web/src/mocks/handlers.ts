@@ -23,6 +23,8 @@ import { WS_URL } from "@/shared/api/ws";
 import { DEMO_PASSWORD } from "@/shared/lib/demo";
 import type {
   AlertCreatedMessage,
+  CoachRequest,
+  CoachResponse,
   AuditEntry,
   ModelVersion,
   Rule,
@@ -44,6 +46,17 @@ import type {
 } from "@/shared/types/api";
 
 const url = (path: string) => `${API_URL}${path}`;
+
+// Scam Coach (T5.4): questions waiting for answers, by txn_id, and those already answered
+const coachOpen = new Map<string, { questions: string[]; modelDecision: string; risk: number; owner: string }>();
+const coachDone = new Set<string>();
+const COACH_TEXT: Record<string, string> = {
+  on_call_instructed: "Is someone on a call telling you to make this payment?",
+  threat_or_arrest: "Did anyone say you'll be arrested, fined or your account blocked?",
+  refund_to_receive: "Are you paying to receive a refund, prize or cashback?",
+  asked_secrecy: "Were you told not to tell family or the bank?",
+  know_payee: "Have you met or paid this person before?",
+};
 const ACCESS_TTL_S = 1800;
 
 function apiError(status: number, code: string, message: string) {
@@ -326,23 +339,29 @@ export const handlers = [
     if (auth.error) return auth.error;
     const body = (await request.json()) as ScoreRequest;
     const onCall = Boolean(body.context?.on_call && !body.context.caller_in_contacts);
-    const risk = Math.min(0.99, body.amount / 100_000 + (onCall ? 0.3 : 0) + (body.context?.screen_share_active ? 0.25 : 0));
-    const decision = decisionFor(risk);
+    const screenShare = Boolean(body.context?.screen_share_active);
+    const risk = Math.min(0.99, body.amount / 100_000 + (onCall ? 0.3 : 0) + (screenShare ? 0.25 : 0));
+    const modelDecision = decisionFor(risk);
+    // coach first (T5.4): a scam-call payment that would be checked or held gets the questions
+    const coach = (onCall || screenShare) && modelDecision !== "APPROVE";
+    const decision = coach ? "STEP_UP" : modelDecision;
+    const digitalArrest = screenShare || (body.context?.call_duration_s ?? 0) > 300;
+    const questions = !coach
+      ? []
+      : digitalArrest
+        ? ["on_call_instructed", "threat_or_arrest", "asked_secrecy"]
+        : ["on_call_instructed", "refund_to_receive", "know_payee"];
+    if (coach) coachOpen.set(body.txn_id, { questions, modelDecision, risk, owner: auth.user.id });
     const response: ScoreResponse = {
       txn_id: body.txn_id,
       risk_score: Math.round(risk * 10_000) / 10_000,
       decision,
-      action: decision === "HOLD" ? "ANALYST_REVIEW" : decision === "STEP_UP" ? (onCall ? "SCAM_COACH" : "OTP") : "NONE",
+      action: coach ? "SCAM_COACH" : decision === "HOLD" ? "ANALYST_REVIEW" : decision === "STEP_UP" ? "OTP" : "NONE",
       model_scores: { transaction: risk, anomaly: 0.05, graph: 0, social_eng: onCall ? 0.9 : 0.05 },
       top_reasons: reasonsFor(risk, onCall),
       explanation: decision === "APPROVE" ? "This payment looks normal." : "Before you pay, please answer a few quick questions.",
       explanation_status: decision === "APPROVE" ? "ready" : "pending",
-      coach_questions: onCall
-        ? [
-            { key: "on_call_instructed", text: "Is someone on a call telling you to make this payment?" },
-            { key: "refund_to_receive", text: "Are you paying to receive a refund, prize or cashback?" },
-          ]
-        : [],
+      coach_questions: questions.map((key) => ({ key, text: COACH_TEXT[key] ?? key })),
       model_version: "ensemble-mock",
       degraded: ["graph"],
       latency_ms: 12,
@@ -357,6 +376,44 @@ export const handlers = [
         );
       }, 1500);
     }
+    return HttpResponse.json(response);
+  }),
+
+  http.post(url("/transactions/:txnId/coach"), async ({ request, params }) => {
+    const auth = needUser(request, ["customer"]);
+    if (auth.error) return auth.error;
+    const txnId = String(params.txnId);
+    const open = coachOpen.get(txnId);
+    if (!open || open.owner !== auth.user.id) {
+      return coachDone.has(txnId)
+        ? apiError(409, "COACH_ALREADY_ANSWERED", "These questions were already answered")
+        : apiError(404, "NOT_FOUND", "No Scam Coach questions for this payment");
+    }
+    const { answers } = (await request.json()) as CoachRequest;
+    const keys = Object.keys(answers);
+    if (keys.length !== open.questions.length || !open.questions.every((k) => k in answers)) {
+      return apiError(400, "VALIDATION_ERROR", "Answer exactly the questions asked");
+    }
+    coachOpen.delete(txnId);
+    coachDone.add(txnId);
+    const flags = open.questions.filter((k) => answers[k] === (k !== "know_payee")).length;
+    const decision = flags > 0 || open.modelDecision === "HOLD" ? "HOLD" : "STEP_UP";
+    const reasons = reasonsFor(Math.max(open.risk, 0.8), true);
+    const response: CoachResponse = {
+      txn_id: txnId,
+      risk_score: Math.round(Math.max(open.risk, flags ? 0.9 : open.risk) * 10_000) / 10_000,
+      decision,
+      action: decision === "HOLD" ? "ANALYST_REVIEW" : "OTP",
+      explanation:
+        flags > 0
+          ? "We stopped this payment because your answers match a common scam. Please call your bank before you pay anyone."
+          : decision === "HOLD"
+            ? "We paused this payment. An analyst will check it."
+            : "Please confirm this payment with the OTP we sent you.",
+      explanation_status: "pending",
+      top_reasons: flags ? [{ feature: "coach_red_flags", value: flags, impact: 1.2, text: `Warning signs in your answers: ${flags}` }, ...reasons] : reasons,
+      red_flags: flags,
+    };
     return HttpResponse.json(response);
   }),
 
