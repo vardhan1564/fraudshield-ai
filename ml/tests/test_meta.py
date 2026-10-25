@@ -48,6 +48,17 @@ def test_thresholds_meet_the_fpr_targets_and_are_ordered() -> None:
     assert th["hold"] == threshold_for_fpr(y, oof, 0.01)
 
 
+def test_hold_keeps_a_margin_above_the_rule_boost() -> None:
+    # legit scores sit near zero, so the 1%-FPR HOLD threshold alone would be below the boost
+    rng = np.random.default_rng(1)
+    y = (rng.random(20_000) < 0.03).astype(int)
+    oof = np.where(y == 1, 0.9, rng.random(20_000) * 0.02)
+    th = choose_thresholds(y, oof, THRESHOLD_CFG, boost=0.25)
+    assert th["hold"] == pytest.approx(0.25 + th["step_up"])
+    # a payment at the STEP_UP threshold plus the rule is not held
+    assert decide(np.array([th["step_up"] + 0.25]), th).tolist() == ["STEP_UP"]
+
+
 def test_decide() -> None:
     th = {"step_up": 0.2, "hold": 0.7}
     assert decide(np.array([0.1, 0.2, 0.5, 0.7, 0.9]), th).tolist() == [

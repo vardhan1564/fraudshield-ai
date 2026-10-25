@@ -140,11 +140,18 @@ def risk_score(
     return apply_rules(model.predict_proba(scores[SCORE_COLUMNS].to_numpy())[:, 1], X, boost)
 
 
-def choose_thresholds(y: np.ndarray, oof: np.ndarray, cfg: dict[str, float]) -> dict[str, float]:
-    """Spec 03 §5 on out-of-fold validation scores: flag when risk > threshold."""
-    hold = threshold_for_fpr(y, oof, cfg["hold_fpr"])
-    step_up = min(threshold_for_fpr(y, oof, cfg["step_up_fpr"]), hold)  # STEP_UP never above HOLD
-    return {"step_up": step_up, "hold": hold}
+def choose_thresholds(
+    y: np.ndarray, oof: np.ndarray, cfg: dict[str, float], boost: float = 0.0
+) -> dict[str, float]:
+    """Spec 03 §5 on out-of-fold validation scores: flag when risk > threshold.
+
+    HOLD is kept at or above boost + STEP_UP, so the F2 rule on its own moves a payment the
+    models would approve to STEP_UP (Scam Coach), never straight to HOLD. Without this margin
+    HOLD sat right on the boost and every legit unknown-call payment to a new payee was held.
+    """
+    step_up = threshold_for_fpr(y, oof, cfg["step_up_fpr"])
+    hold = max(threshold_for_fpr(y, oof, cfg["hold_fpr"]), boost + step_up)
+    return {"step_up": min(step_up, hold), "hold": hold}  # STEP_UP never above HOLD
 
 
 def decide(risk: np.ndarray, thresholds: dict[str, float]) -> np.ndarray:
@@ -243,7 +250,7 @@ def train_meta(ds: Dataset, base: BaseModels, cfg: dict[str, Any]) -> MetaResult
         make_meta(seed), s_val[SCORE_COLUMNS].to_numpy(), y_val, cv=folds, method="predict_proba"
     )[:, 1]
     oof = apply_rules(oof, x_val, boost)  # thresholds see the rule, so FPR targets still hold
-    thresholds = choose_thresholds(y_val, oof, mcfg)
+    thresholds = choose_thresholds(y_val, oof, mcfg, boost)
     model = make_meta(seed).fit(s_val[SCORE_COLUMNS].to_numpy(), y_val)
 
     risk_test = risk_score(model, s_test, x_test, boost)

@@ -1,0 +1,274 @@
+{
+  "model": "graph_model",
+  "version": "2026-10-25",
+  "features": [
+    "type_A",
+    "type_P",
+    "type_D",
+    "type_I",
+    "graph_degree",
+    "graph_pagerank",
+    "hops_to_fraud",
+    "community_fraud_ratio",
+    "in_count",
+    "out_count",
+    "in_amount",
+    "out_amount",
+    "distinct_senders",
+    "senders_24h",
+    "forwarded_share",
+    "account_age",
+    "device_accounts",
+    "young_incoming"
+  ],
+  "threshold": 0.9402502179145813,
+  "config": {
+    "train_seeds": [
+      101,
+      102
+    ],
+    "val_seed": 103,
+    "window_days": 30,
+    "train_every_days": 2,
+    "history_every_hours": 3,
+    "fraud_min_reports": 2,
+    "target_fpr": 0.01,
+    "min_recall": 0.85,
+    "hidden": 64,
+    "dropout": 0.2,
+    "lr": 0.01,
+    "weight_decay": 0.0005,
+    "epochs": 60,
+    "patience": 10
+  },
+  "sizes": {
+    "train_snapshots": 60,
+    "val_snapshots": 30,
+    "train_accounts": 591425,
+    "train_mules": 9581
+  },
+  "val": {
+    "pr_auc": 1.0,
+    "recall": 1.0,
+    "fpr": 0.0,
+    "epochs": 13,
+    "best_epoch": 2
+  },
+  "main_dataset": {
+    "at_end": {
+      "ring_recall": 1.0,
+      "mule_recall": 0.9945205479452055,
+      "ordinary_fpr": 2.6427340669563102e-05,
+      "rings": [
+        {
+          "ring": "R01",
+          "members": 19,
+          "flagged": 18
+        },
+        {
+          "ring": "R02",
+          "members": 20,
+          "flagged": 20
+        },
+        {
+          "ring": "R03",
+          "members": 19,
+          "flagged": 19
+        },
+        {
+          "ring": "R04",
+          "members": 10,
+          "flagged": 10
+        },
+        {
+          "ring": "R05",
+          "members": 27,
+          "flagged": 27
+        },
+        {
+          "ring": "R06",
+          "members": 14,
+          "flagged": 14
+        },
+        {
+          "ring": "R07",
+          "members": 15,
+          "flagged": 15
+        },
+        {
+          "ring": "R08",
+          "members": 19,
+          "flagged": 19
+        },
+        {
+          "ring": "R09",
+          "members": 17,
+          "flagged": 17
+        },
+        {
+          "ring": "R10",
+          "members": 17,
+          "flagged": 17
+        },
+        {
+          "ring": "R11",
+          "members": 15,
+          "flagged": 15
+        },
+        {
+          "ring": "R12",
+          "members": 17,
+          "flagged": 17
+        },
+        {
+          "ring": "R13",
+          "members": 14,
+          "flagged": 14
+        },
+        {
+          "ring": "R14",
+          "members": 19,
+          "flagged": 19
+        },
+        {
+          "ring": "R15",
+          "members": 21,
+          "flagged": 20
+        },
+        {
+          "ring": "R16",
+          "members": 14,
+          "flagged": 14
+        },
+        {
+          "ring": "R17",
+          "members": 23,
+          "flagged": 23
+        },
+        {
+          "ring": "R18",
+          "members": 19,
+          "flagged": 19
+        },
+        {
+          "ring": "R19",
+          "members": 18,
+          "flagged": 18
+        },
+        {
+          "ring": "R20",
+          "members": 28,
+          "flagged": 28
+        }
+      ]
+    },
+    "early": {
+      "ring_recall": 1.0,
+      "mule_recall": 0.948905109489051,
+      "ordinary_fpr": 2.118812405646635e-05,
+      "rings": [
+        {
+          "ring": "R01",
+          "members": 7,
+          "flagged": 6
+        },
+        {
+          "ring": "R02",
+          "members": 6,
+          "flagged": 6
+        },
+        {
+          "ring": "R03",
+          "members": 7,
+          "flagged": 7
+        },
+        {
+          "ring": "R04",
+          "members": 6,
+          "flagged": 6
+        },
+        {
+          "ring": "R05",
+          "members": 9,
+          "flagged": 9
+        },
+        {
+          "ring": "R06",
+          "members": 12,
+          "flagged": 12
+        },
+        {
+          "ring": "R07",
+          "members": 7,
+          "flagged": 7
+        },
+        {
+          "ring": "R08",
+          "members": 7,
+          "flagged": 5
+        },
+        {
+          "ring": "R09",
+          "members": 11,
+          "flagged": 11
+        },
+        {
+          "ring": "R10",
+          "members": 6,
+          "flagged": 6
+        },
+        {
+          "ring": "R11",
+          "members": 3,
+          "flagged": 3
+        },
+        {
+          "ring": "R12",
+          "members": 5,
+          "flagged": 5
+        },
+        {
+          "ring": "R13",
+          "members": 4,
+          "flagged": 4
+        },
+        {
+          "ring": "R14",
+          "members": 9,
+          "flagged": 9
+        },
+        {
+          "ring": "R15",
+          "members": 9,
+          "flagged": 8
+        },
+        {
+          "ring": "R16",
+          "members": 4,
+          "flagged": 4
+        },
+        {
+          "ring": "R17",
+          "members": 7,
+          "flagged": 7
+        },
+        {
+          "ring": "R18",
+          "members": 7,
+          "flagged": 4
+        },
+        {
+          "ring": "R19",
+          "members": 3,
+          "flagged": 3
+        },
+        {
+          "ring": "R20",
+          "members": 8,
+          "flagged": 8
+        }
+      ]
+    }
+  },
+  "artifact_hash": "b604cceb305ff1a0"
+}

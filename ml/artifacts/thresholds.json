@@ -1,6 +1,6 @@
 {
   "model": "meta_model",
-  "created": "2026-10-18",
+  "created": "2026-10-25",
   "rule": "risk_score > hold -> HOLD; risk_score > step_up -> STEP_UP; else APPROVE",
   "risk_rules": {
     "unknown_call_new_payee": {
@@ -10,15 +10,15 @@
     }
   },
   "step_up": 0.01605032756694744,
-  "hold": 0.25,
+  "hold": 0.26605032756694746,
   "targets": {
     "step_up_max_fpr": 0.05,
     "hold_max_fpr": 0.01
   },
   "validation_out_of_fold": {
-    "fpr_hold": 0.005391920167390954,
+    "fpr_hold": 0.0023338161918557863,
     "fpr_step_up_or_hold": 0.04748108804120393,
-    "recall_hold": 0.8621908127208481
+    "recall_hold": 0.8551236749116607
   },
   "inputs": [
     "txn_score",
