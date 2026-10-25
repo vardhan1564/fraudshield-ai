@@ -1,5 +1,6 @@
 """Reading scored payments (spec 04 endpoints 7-8): the analyst list and one payment's detail."""
 
+import uuid
 from datetime import datetime
 from typing import Any
 
@@ -7,7 +8,7 @@ from sqlalchemy import ColumnElement, Select, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.errors import AppError
-from app.models import Device, ModelScore, Payee, Transaction, User
+from app.models import Alert, Case, Device, ModelScore, Payee, Transaction, User
 from app.models.enums import Channel, Decision, Role
 from app.schemas.common import Page
 from app.schemas.txn_views import TxnDetail, TxnDevice, TxnItem, TxnScores
@@ -15,7 +16,7 @@ from app.services import explain
 from app.services.lookups import by_ref, user_filter
 
 
-def _item(txn: Transaction, user: User, payee: Payee) -> dict[str, Any]:
+def _item(txn: Transaction, user: User, payee: Payee, case_id: uuid.UUID | None) -> dict[str, Any]:
     return {
         "id": txn.id,
         "txn_id": txn.txn_id,
@@ -32,12 +33,22 @@ def _item(txn: Transaction, user: User, payee: Payee) -> dict[str, Any]:
         "model_version": txn.model_version,
         "latency_ms": txn.latency_ms,
         "ts": txn.ts,
+        "case_id": case_id,
     }
 
 
-def _base() -> Select[Transaction, User, Payee]:
+def _base() -> Select[Transaction, User, Payee, uuid.UUID | None]:
+    # the payment's case, if it was held (one alert and case per HOLD; latest wins to be safe)
+    case_id = (
+        select(Case.id)
+        .join(Alert, Alert.id == Case.alert_id)
+        .where(Alert.txn_id == Transaction.id)
+        .order_by(Alert.created_at.desc())
+        .limit(1)
+        .scalar_subquery()
+    )
     return (
-        select(Transaction, User, Payee)
+        select(Transaction, User, Payee, case_id)
         .join(User, User.id == Transaction.user_id)
         .join(Payee, Payee.id == Transaction.payee_id)
     )
@@ -79,7 +90,7 @@ async def list_transactions(
         .offset((page - 1) * page_size)
         .limit(page_size)
     )
-    items = [TxnItem(**_item(txn, user, payee)) for txn, user, payee in rows]
+    items = [TxnItem(**_item(*row)) for row in rows]
     return Page(items=items, page=page, page_size=page_size, total=total)
 
 
@@ -96,9 +107,9 @@ async def get_transaction(session: AsyncSession, txn_ref: str, viewer: User) -> 
     ).first()
     if row is None or (viewer.role == Role.CUSTOMER and row[0].user_id != viewer.id):
         raise AppError(404, "NOT_FOUND", "Transaction not found")
-    txn, user, payee, scores, device = row
+    txn, user, payee, case_id, scores, device = row
     return TxnDetail(
-        **_item(txn, user, payee),
+        **_item(txn, user, payee, case_id),
         model_scores=None
         if scores is None
         else TxnScores(

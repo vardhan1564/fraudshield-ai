@@ -24,7 +24,7 @@ import { LoginPage } from "@/shared/pages/LoginPage";
 import { NotFoundPage } from "@/shared/pages/NotFoundPage";
 
 const BUILT = new Set([
-  "/dashboard", "/dashboard/live", "/dashboard/alerts", "/dashboard/payees",
+  "/dashboard", "/dashboard/live", "/dashboard/alerts", "/dashboard/graph", "/dashboard/payees",
   "/dashboard/rules", "/dashboard/models", "/dashboard/audit",
 ]);
 
@@ -32,7 +32,7 @@ export const routes: RouteObject[] = [
   { path: "/", element: <RootRedirect /> },
   { path: "/login", element: <LoginPage /> },
   {
-    // Analyst and admin dashboard (spec 06). Graph Explorer is a placeholder until T5.3.
+    // Analyst and admin dashboard (spec 06).
     element: <RequireAuth roles={["analyst", "admin"]} />,
     children: [
       {
@@ -42,6 +42,11 @@ export const routes: RouteObject[] = [
           { index: true, element: <OverviewPage /> },
           { path: "live", element: <LiveMonitorPage /> },
           { path: "alerts", element: <AlertQueuePage /> },
+          {
+            // loaded on first visit: Cytoscape is ~400 kB the rest of the app never needs
+            path: "graph/:entityId?",
+            lazy: () => import("@/dashboard/pages/GraphExplorerPage").then((m) => ({ Component: m.GraphExplorerPage })),
+          },
           { path: "payees", element: <PayeesPage /> },
           {
             // admin pages: blocked by URL too, not only hidden from the menu (T4.7)

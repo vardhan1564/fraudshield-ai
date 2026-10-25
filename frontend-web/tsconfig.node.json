@@ -2,7 +2,7 @@
   "compilerOptions": {
     "tsBuildInfoFile": "./node_modules/.tmp/tsconfig.node.tsbuildinfo",
     "target": "ES2023",
-    "lib": ["ES2023"],
+    "lib": ["ES2023", "DOM"], // DOM: e2e code inside page.evaluate runs in the browser
     "module": "ESNext",
     "types": ["node"],
     "skipLibCheck": true,

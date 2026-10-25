@@ -26,6 +26,7 @@ class TxnItem(BaseModel):
     model_version: str | None
     latency_ms: int | None
     ts: datetime
+    case_id: uuid.UUID | None  # the case, if the payment was held (Graph Explorer links)
 
 
 class TxnScores(BaseModel):

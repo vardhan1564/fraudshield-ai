@@ -33,6 +33,8 @@
   /* SHAP waterfall (T4.4), a diverging pair: raises risk = red, lowers risk = blue (validated) */
   --chart-raises: #e34948;
   --chart-lowers: #2a78d6;
+  /* Graph Explorer (T5.3): ring halo, violet so it never reads as a risk level */
+  --graph-ring: #7c4dce;
 }
 
 .dark {
@@ -61,6 +63,7 @@
   --chart-flagged: #00a99c;
   --chart-raises: #e66767;
   --chart-lowers: #3987e5;
+  --graph-ring: #a585f0;
 }
 
 @theme inline {
@@ -90,6 +93,7 @@
   --color-chart-flagged: var(--chart-flagged);
   --color-chart-raises: var(--chart-raises);
   --color-chart-lowers: var(--chart-lowers);
+  --color-graph-ring: var(--graph-ring);
   --radius-sm: calc(var(--radius) - 4px);
   --radius-md: calc(var(--radius) - 2px);
   --radius-lg: var(--radius);

@@ -265,3 +265,19 @@ async def test_login_and_register_are_audited(
     assert all(r.before_json is None and r.after_json is None for r in mine)  # nothing secret
     assert registered is not None and registered.action == "auth.register"
     assert registered.after_json == {"role": "customer", "language": "en"}
+
+
+async def test_txn_case_id(app: FastAPI, client: AsyncClient, customer: User) -> None:  # noqa: F811
+    """GET /transactions items carry case_id once held (the Graph Explorer's case links)."""
+    held = await held_case(app, client, customer)
+    approved = payment(customer, 1_000.0)
+    assert (await client.post(URL, json=approved, headers=PARTNER)).json()["decision"] == "APPROVE"
+    auth = bearer(app, await make_user(app, role=Role.ANALYST))
+    r = await client.get(
+        "/api/v1/transactions", params={"user_id": customer.external_id}, headers=auth
+    )
+    assert r.status_code == 200, r.text
+    by_txn = {t["txn_id"]: t["case_id"] for t in r.json()["items"]}
+    assert by_txn == {held["txn_id"]: held["case_id"], approved["txn_id"]: None}
+    detail = await client.get(f"/api/v1/transactions/{held['txn_id']}", headers=auth)
+    assert detail.json()["case_id"] == held["case_id"]

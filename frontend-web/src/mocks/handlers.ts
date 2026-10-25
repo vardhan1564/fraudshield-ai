@@ -16,6 +16,7 @@ import {
   TRANSACTIONS,
   USERS,
 } from "@/mocks/data";
+import { neighbourhood, ringPage } from "@/mocks/graph";
 import { fieldOf, MERCHANT_CATEGORIES, opsFor } from "@/dashboard/lib/rules";
 import { API_URL } from "@/shared/api/client";
 import { WS_URL } from "@/shared/api/ws";
@@ -80,7 +81,7 @@ function toItem(t: TxnDetail): TxnItem {
     id: t.id, txn_id: t.txn_id, user_id: t.user_id, customer_external_id: t.customer_external_id,
     amount: t.amount, currency: t.currency, channel: t.channel, merchant_category: t.merchant_category,
     payee_vpa: t.payee_vpa, risk_score: t.risk_score, decision: t.decision, action: t.action,
-    model_version: t.model_version, latency_ms: t.latency_ms, ts: t.ts,
+    model_version: t.model_version, latency_ms: t.latency_ms, ts: t.ts, case_id: t.case_id,
   };
 }
 
@@ -365,11 +366,13 @@ export const handlers = [
     const params = new URL(request.url).searchParams;
     const decision = params.get("decision");
     const from = params.get("from");
+    const payeeVpa = params.get("payee_vpa")?.trim().toLowerCase();
     // customers (and mine=true) only ever get their own payments (T4.5)
     const userId = auth.user.role === "customer" || params.get("mine") === "true" ? auth.user.id : params.get("user_id");
     const items = TRANSACTIONS.filter((t) => !decision || t.decision === decision)
       .filter((t) => !userId || t.user_id === userId || t.customer_external_id === userId)
       .filter((t) => !from || Date.parse(t.ts) >= Date.parse(from))
+      .filter((t) => !payeeVpa || t.payee_vpa === payeeVpa)
       .sort((a, b) => Date.parse(b.ts) - Date.parse(a.ts))
       .map(toItem);
     return HttpResponse.json(page(items, request));
@@ -464,6 +467,21 @@ export const handlers = [
         : [],
     };
     return HttpResponse.json(body);
+  }),
+
+  http.get(url("/graph/entity/:id"), ({ request, params }) => {
+    const auth = needUser(request, ["analyst"]);
+    if (auth.error) return auth.error;
+    const depth = Number(new URL(request.url).searchParams.get("depth") ?? "2");
+    if (!(depth >= 1 && depth <= 3)) return apiError(400, "VALIDATION_ERROR", "depth must be 1-3");
+    const found = neighbourhood(decodeURIComponent(String(params.id)), depth);
+    return found ? HttpResponse.json(found) : apiError(404, "NOT_FOUND", "Unknown graph node");
+  }),
+
+  http.get(url("/graph/rings"), ({ request }) => {
+    const auth = needUser(request, ["analyst"]);
+    if (auth.error) return auth.error;
+    return HttpResponse.json(ringPage(new URL(request.url).searchParams));
   }),
 
   http.get(url("/metrics/overview"), ({ request }) => {

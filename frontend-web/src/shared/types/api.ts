@@ -159,6 +159,7 @@ export interface TxnItem {
   model_version: string | null;
   latency_ms: number | null;
   ts: IsoDateTime;
+  case_id: Uuid | null; // the case, if the payment was held (T5.3)
 }
 
 export interface TxnDetail extends TxnItem {
@@ -282,6 +283,58 @@ export interface PayeeReputation {
     | { report_id: Uuid; scam_type: string; description: string | null; phone: string | null;
         created_at: IsoDateTime }[]
     | null; // analysts/admins only
+}
+
+// --- graph explorer (endpoints 15-16, §2.5) -------------------------------------------------
+
+/** `A:{user}`, `P:{vpa}`, `D:{fingerprint}` or `I:{ip}` (spec 05 §3). */
+export type GraphNodeType = "Account" | "Payee" | "Device" | "IP";
+export type GraphEdgeType = "SENT" | "USED_DEVICE" | "LOGGED_FROM";
+export type RingStatus = "suspected" | "confirmed" | "dismissed";
+
+export interface GraphNode {
+  id: string;
+  type: GraphNodeType;
+  label: string; // masked: phone, VPA, IP
+  risk: number | null; // accounts: graph_score; payees: reputation; devices/IPs: null
+  flags: string[]; // fan_in, pass_through, shared_device, new_account_burst, gnn, mule_suspect
+}
+
+export interface GraphEdge {
+  source: string;
+  target: string;
+  type: GraphEdgeType;
+  amount: number | null;
+  ts: IsoDateTime;
+}
+
+export interface RingRef {
+  id: Uuid;
+  members: string[];
+  score: number;
+}
+
+export interface Neighbourhood {
+  nodes: GraphNode[];
+  edges: GraphEdge[];
+  rings: RingRef[];
+  truncated: boolean; // node or edge cap reached
+}
+
+export interface RingItem extends RingRef {
+  size: number;
+  detector: string;
+  status: RingStatus;
+  first_seen: IsoDateTime;
+  last_seen: IsoDateTime;
+}
+
+export interface RingFilters {
+  status?: RingStatus;
+  detector?: string;
+  min_score?: number;
+  page?: number;
+  page_size?: number;
 }
 
 // --- admin: rules, models, audit (endpoints 23-25, 27) ----------------------------------------

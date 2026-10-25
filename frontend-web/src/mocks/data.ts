@@ -101,6 +101,7 @@ export const TRANSACTIONS: TxnDetail[] = Array.from({ length: 48 }, (_, i) => {
     model_version: "ensemble-2026-10-18-txn2",
     latency_ms: 9 + Math.round(rand() * 14),
     ts: new Date(now - i * 23 * 60_000).toISOString(),
+    case_id: null,
     model_scores: {
       transaction: Math.min(1, risk * 1.1),
       anomaly: rand() * 0.2,
@@ -128,8 +129,9 @@ function severityOf(risk: number): CaseDetail["severity"] {
 }
 
 function caseFor(t: TxnDetail, n: number, createdAt: string, assignedTo: string | null): CaseDetail {
+  t.case_id = uuid(8000 + n); // GET /transactions links a held payment to its case
   return {
-    case_id: uuid(8000 + n),
+    case_id: t.case_id,
     alert_id: uuid(7000 + n),
     severity: severityOf(t.risk_score ?? 0),
     status: assignedTo ? "assigned" : "open",
@@ -180,6 +182,7 @@ export function newPayment(hold: boolean): TxnDetail {
     txn_id: `TXN-LIVE-${String(liveCount).padStart(5, "0")}`,
     amount: Math.round(template.amount * (0.6 + rand() * 0.8) * 100) / 100,
     ts,
+    case_id: null,
   };
   TRANSACTIONS.unshift(txn);
   if (hold) CASES.unshift(caseFor(txn, 1000 + liveCount, ts, null));

@@ -10,7 +10,7 @@ function row(n: number, risk = 0.01): TxnItem {
     id: `id-${n}`, txn_id: `TXN-${n}`, user_id: "u", customer_external_id: null, amount: 100 + n,
     currency: "INR", channel: "UPI", merchant_category: null, payee_vpa: "a@ok", risk_score: risk,
     decision: "APPROVE", action: "NONE", model_version: null, latency_ms: 10,
-    ts: new Date(T0 + n * 1000).toISOString(),
+    ts: new Date(T0 + n * 1000).toISOString(), case_id: null,
   };
 }
 
